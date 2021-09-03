@@ -7,65 +7,34 @@ Require Import Relations.Operators_Properties.
 Variable IName: countType.
 Variable MName: countType.
 
+Inductive Ty : Type :=
+| TyRef : IName -> (*seq Ty ->*) Ty
+(*| ClassTyVar : nat -> Ty
+| MethodTyVar : nat -> Ty*).
+
 Inductive Expression : Type :=
 | Var: nat -> Expression
-| MethodCall: Expression -> IName -> MName -> Expression -> Expression
-| Lambda: IName ->  Expression -> Expression.
-
-Inductive Ty : Type :=
-| TyRef : IName -> Ty.
+| MethodCall: Expression -> MName -> Expression -> Expression
+| Lambda: Ty -> Expression -> Expression.
 
 Inductive Signature : Type :=
-| MethodHeader: Ty -> MName -> Ty -> Signature.
+| MethodHeader: (*nat ->*) Ty -> MName -> Ty -> Signature.
 
 Inductive MethodDeclaration: Type :=
 | AbstractMethod: Signature -> MethodDeclaration
 | DefaultMethod: Signature -> Expression -> MethodDeclaration.
 
 Inductive Declaration : Type :=
-| Interface: IName -> seq IName -> seq MethodDeclaration -> Declaration.
+| Interface: IName -> (*nat ->*) seq Ty -> seq MethodDeclaration -> Declaration.
 
 Inductive Program : Type :=
 | Decls: seq Declaration -> Program.
 
 Inductive Value : Type :=
-| VLambda : IName -> Expression -> Value.
-
+| VLambda : Ty -> Expression -> Value.
 
 
 Section MathcompInstances.
-  Fixpoint Expression2Tree (e: Expression): GenTree.tree (nat + IName + MName) :=
-    match e with
-    | Var n => GenTree.Node 0 [:: GenTree.Leaf (inl (inl n))]
-    | MethodCall o i m arg => GenTree.Node 1 [:: Expression2Tree o; GenTree.Leaf (inl (inr i)); GenTree.Leaf (inr m); Expression2Tree arg]
-    | Lambda i e => GenTree.Node 2 [:: GenTree.Leaf (inl (inr i)); Expression2Tree e]
-    end.
-
-  Fixpoint Tree2Expression (t: GenTree.tree (nat + IName + MName)): option Expression :=
-    match t with
-    | GenTree.Node 0 [:: GenTree.Leaf (inl (inl n))] => Some (Var n)
-    | GenTree.Node 1 [:: ot; GenTree.Leaf (inl (inr i)); GenTree.Leaf (inr m); argt] =>
-      if Tree2Expression ot is Some o then
-        if Tree2Expression argt is Some arg then
-          Some (MethodCall o i m arg)
-        else None
-      else None
-    | GenTree.Node 2 [:: GenTree.Leaf (inl (inr i)); et] =>
-      if Tree2Expression et is Some e then Some (Lambda i e) else None
-    | _ => None
-    end.
-
-  Lemma pcan_Expression2Tree: pcancel Expression2Tree Tree2Expression.
-  Proof.
-    elim => //=; by [ move => ? -> ? ? ? -> | move => ? ? -> ].
-  Qed.
-
-  Definition Expression_eqMixin := PcanEqMixin pcan_Expression2Tree.
-  Canonical Expression_eqType := EqType Expression Expression_eqMixin.
-  Definition Expression_choiceMixin := PcanChoiceMixin pcan_Expression2Tree.
-  Canonical Expression_choiceType := ChoiceType Expression Expression_choiceMixin.
-  Definition Expression_countMixin := PcanCountMixin pcan_Expression2Tree.
-  Canonical Expression_countType := CountType Expression Expression_countMixin.
 
   Definition Ty2Tree (t: Ty): GenTree.tree IName :=
     match t with
@@ -89,6 +58,39 @@ Section MathcompInstances.
   Canonical Ty_choiceType := ChoiceType Ty Ty_choiceMixin.
   Definition Ty_countMixin := PcanCountMixin pcan_Ty2Tree.
   Canonical Ty_countType := CountType Ty Ty_countMixin.
+
+  Fixpoint Expression2Tree (e: Expression): GenTree.tree (nat + Ty + MName) :=
+    match e with
+    | Var n => GenTree.Node 0 [:: GenTree.Leaf (inl (inl n))]
+    | MethodCall o m arg => GenTree.Node 1 [:: Expression2Tree o; GenTree.Leaf (inr m); Expression2Tree arg]
+    | Lambda i e => GenTree.Node 2 [:: GenTree.Leaf (inl (inr i)); Expression2Tree e]
+    end.
+
+  Fixpoint Tree2Expression (t: GenTree.tree (nat + Ty + MName)): option Expression :=
+    match t with
+    | GenTree.Node 0 [:: GenTree.Leaf (inl (inl n))] => Some (Var n)
+    | GenTree.Node 1 [:: ot; GenTree.Leaf (inr m); argt] =>
+      if Tree2Expression ot is Some o then
+        if Tree2Expression argt is Some arg then
+          Some (MethodCall o m arg)
+        else None
+      else None
+    | GenTree.Node 2 [:: GenTree.Leaf (inl (inr i)); et] =>
+      if Tree2Expression et is Some e then Some (Lambda i e) else None
+    | _ => None
+    end.
+
+  Lemma pcan_Expression2Tree: pcancel Expression2Tree Tree2Expression.
+  Proof.
+    elim => //=; by [ move => ? -> ? ? -> | move => ? ? -> ].
+  Qed.
+
+  Definition Expression_eqMixin := PcanEqMixin pcan_Expression2Tree.
+  Canonical Expression_eqType := EqType Expression Expression_eqMixin.
+  Definition Expression_choiceMixin := PcanChoiceMixin pcan_Expression2Tree.
+  Canonical Expression_choiceType := ChoiceType Expression Expression_choiceMixin.
+  Definition Expression_countMixin := PcanCountMixin pcan_Expression2Tree.
+  Canonical Expression_countType := CountType Expression Expression_countMixin. 
 
   Definition Signature2Tree (s: Signature): GenTree.tree (Ty + MName) :=
     match s with
@@ -138,12 +140,12 @@ Section MathcompInstances.
   Definition MethodDeclaration_countMixin := PcanCountMixin pcan_MethodDeclaration2Tree.
   Canonical MethodDeclaration_countType := CountType MethodDeclaration MethodDeclaration_countMixin.
 
-  Definition Declaration2Tree (d: Declaration): GenTree.tree (IName + seq IName + seq MethodDeclaration) :=
+  Definition Declaration2Tree (d: Declaration): GenTree.tree (IName + seq Ty + seq MethodDeclaration) :=
     match d with
     | Interface i ps ms => GenTree.Node 0 [:: GenTree.Leaf (inl (inl i)); GenTree.Leaf (inl (inr ps)); GenTree.Leaf (inr ms)]
     end.
 
-  Definition Tree2Declaration (t: GenTree.tree (IName + seq IName + seq MethodDeclaration)): option Declaration :=
+  Definition Tree2Declaration (t: GenTree.tree (IName + seq Ty + seq MethodDeclaration)): option Declaration :=
     match t with
     | GenTree.Node 0 [:: GenTree.Leaf (inl (inl i)); GenTree.Leaf (inl (inr ps)); GenTree.Leaf (inr ms)]  => Some (Interface i ps ms)
     | _ => None
@@ -184,12 +186,12 @@ Section MathcompInstances.
   Definition Program_countMixin := PcanCountMixin pcan_Program2Tree.
   Canonical Program_countType := CountType Program Program_countMixin.
 
-  Definition Value2Tree (p: Value): GenTree.tree (IName + Expression) :=
+  Definition Value2Tree (p: Value): GenTree.tree (Ty + Expression) :=
     match p with
     | VLambda i e => GenTree.Node 0 [:: GenTree.Leaf (inl i); GenTree.Leaf (inr e)]
     end.
 
-  Definition Tree2Value (t: GenTree.tree (IName + Expression)): option Value :=
+  Definition Tree2Value (t: GenTree.tree (Ty + Expression)): option Value :=
     match t with
     | GenTree.Node 0 [:: GenTree.Leaf (inl i); GenTree.Leaf (inr e)] => Some (VLambda i e)
     | _ => None
@@ -209,16 +211,17 @@ Section MathcompInstances.
 End MathcompInstances.
 
 
-Inductive ECtxt (exp: Expression): Type :=
-| EvalCallTgt : IName -> MName -> Expression -> ECtxt exp
-| EvalCallArg : Value -> IName -> MName -> ECtxt exp.
+(* exp is the hole of the context *)
+Inductive EvalCtx (exp: Expression): Type :=
+| EvalCallReceiver : MName -> Expression -> EvalCtx exp
+| EvalCallArg : Value -> MName -> EvalCtx exp.
 
-Definition Ctxt : Type := seq Ty.
+Definition TypeCtx : Type := seq Ty.
 
 Definition typeof (v: Value) : Ty :=
-  match v with | VLambda i _ => TyRef i end.
+  match v with | VLambda i _ => i end.
 
-Definition types (p: Program) :=
+Definition domain (p: Program): seq IName :=
   match p with
   | Decls decls => map (fun d => match d with Interface i _ _ => i end) decls
   end.
@@ -232,7 +235,7 @@ Definition mdecls (i: Declaration): seq MethodDeclaration :=
 Definition name (decl: Declaration): IName :=
   match decl with | Interface i _ _ => i end.
 
-Definition parents (decl: Declaration): seq IName :=
+Definition parents (decl: Declaration): seq Ty :=
   match decl with | Interface _ pis _ => pis end.
 
 Definition mname (mdecl: MethodDeclaration): MName :=
@@ -249,12 +252,12 @@ Definition signatures (i: Declaration): seq Signature :=
 
 Inductive HasDefault (p: Program) (i: IName) (m: MName): Expression -> Prop :=
 | HasDefault_Here: forall pis mdecls r s e,
-    ((DefaultMethod (MethodHeader r m s) e) \in mdecls) ->
     ((Interface i pis mdecls) \in decls p) ->
+    ((DefaultMethod (MethodHeader r m s) e) \in mdecls) ->
     HasDefault p i m e.
 
 Definition has_parent (p: Program) (i: IName) (pi: IName): bool :=
-  has (fun decl => (name decl == i) && (pi \in parents decl)) (decls p).
+  has (fun decl => (name decl == i) && (TyRef pi \in parents decl)) (decls p).
 
 Definition HasParentTrans (p: Program): IName -> IName -> Prop :=
   clos_trans _ (has_parent p).
@@ -263,15 +266,16 @@ Definition ST (p: Program): IName -> IName -> Prop :=
   clos_refl _ (HasParentTrans p).
 
 Inductive MBody (p: Program) (i: IName) (m: MName): IName -> Expression -> Prop :=
-| MBody_here: forall e, HasDefault p i m e -> MBody p i m i e
-| MBody_parent: forall pi ppi e,
+| MBody_Here: forall e, HasDefault p i m e -> MBody p i m i e
+| MBody_Parent: forall pi ppi e,
     (~HasDefault p i m e) ->
     has_parent p i pi ->
     MBody p pi m ppi e ->
     MBody p i m ppi e.
 
-Definition method_names_unique_in_types (p: Program): bool := all (fun decl => uniq (map mname (mdecls decl))) (decls p).
-Definition types_unique (p: Program): bool := uniq (types p).
+Definition method_names_unique_in_types (p: Program): bool :=
+  all (fun decl => uniq (map mname (mdecls decl))) (decls p).
+Definition domain_unique (p: Program): bool := uniq (domain p).
 
 Definition DiamondResolved (p: Program): Prop :=
   forall i m pi1 pi2 ppi1 ppi2 e1 e2,
@@ -282,23 +286,23 @@ Definition DiamondResolved (p: Program): Prop :=
     (ppi1 = ppi2) \/ (exists e, HasDefault p i m e).
 
 Definition OverridesCompatible (p: Program): Prop :=
-  forall decl_sub decl_super m r1 r2 s1 s2,
+  forall decl_sub decl_super m r1 r2 s,
     HasParentTrans p (name decl_sub) (name decl_super) ->
-    (MethodHeader (TyRef r1) m (TyRef s1) \in signatures decl_sub) ->
-    (MethodHeader (TyRef r2) m (TyRef s2) \in signatures decl_super) ->
-    HasParentTrans p r2 r1 /\ HasParentTrans p s1 s2.
+    (MethodHeader (TyRef r1) m (TyRef s) \in signatures decl_sub) ->
+    (MethodHeader (TyRef r2) m (TyRef s) \in signatures decl_super) ->
+    HasParentTrans p r2 r1.
 
 Inductive ParentsWellFounded (i: IName): Program -> Prop :=
-| PWF : forall decls1 decls2 ps ms,
-    (forall p, p \in ps -> ParentsWellFounded p (Decls (decls1 ++ decls2))) ->
-    ParentsWellFounded i (Decls (decls1 ++ [:: Interface i ps ms & decls2])).
+| PWF : forall decls1 decls2 pis ms,
+    (forall pi, pi \in pis -> ParentsWellFounded pi (Decls (decls1 ++ decls2))) ->
+    ParentsWellFounded i (Decls (decls1 ++ [:: Interface i (map TyRef pis) ms & decls2])).
 
 Definition ParentsAcyclic (p: Program): Prop :=
   forall i pi, HasParentTrans p i pi -> ~HasParentTrans p pi i.
 
-Definition ParentsDefined (p: Program): Prop := forall i pi, HasParentTrans p i pi -> pi \in types p.
+Definition ParentsDefined (p: Program): Prop := forall i pi, HasParentTrans p i pi -> pi \in domain p.
 
-Lemma has_parent_defined: forall p i pi, has_parent p i pi -> i \in types p.
+Lemma has_parent_defined: forall p i pi, has_parent p i pi -> i \in domain p.
 Proof.
   case.
   elim => // [] [] i1 pis1 mdecls decls IH i pi.
@@ -312,23 +316,23 @@ Proof.
       by rewrite orbT.
 Qed.
 
-Lemma HasParentTrans_defined: forall p i pi, HasParentTrans p i pi -> i \in types p.
+Lemma HasParentTrans_defined: forall p i pi, HasParentTrans p i pi -> i \in domain p.
 Proof.
   move => p i pi.
   elim => //.
     by apply: has_parent_defined.
 Qed.
 
-Lemma ParentsWellFounded_defined: forall p i, ParentsWellFounded i p -> i \in types p.
+Lemma ParentsWellFounded_defined: forall p i, ParentsWellFounded i p -> i \in domain p.
 Proof.
   move => p i [] decls1 decls2 ps ms _.
-    by rewrite /types map_cat mem_cat /= in_cons eq_refl orbT.
+    by rewrite /domain map_cat mem_cat /= in_cons eq_refl orbT.
 Qed.
 
 Lemma has_parent_unique_in:
   forall decls1 decls2 i pi pis mdecls,
-    types_unique (Decls (decls1 ++ Interface i pis mdecls :: decls2)) ->
-    has_parent (Decls (decls1 ++ Interface i pis mdecls :: decls2)) i pi ->
+    domain_unique (Decls (decls1 ++ Interface i (map TyRef pis) mdecls :: decls2)) ->
+    has_parent (Decls (decls1 ++ Interface i (map TyRef pis) mdecls :: decls2)) i pi ->
     pi \in pis.
 Proof.
   move => decls1 decls2 i pi pis mdecls uniqueprf.
@@ -336,7 +340,7 @@ Proof.
   move => /orP.
   case.
   - move: uniqueprf.
-    rewrite /types_unique /types map_cat cat_uniq.
+    rewrite /domain_unique /domain map_cat cat_uniq.
     move => /andP [] _ /andP [] disprf _.
     move: disprf.
     rewrite map_cons /=.
@@ -349,16 +353,17 @@ Proof.
       by apply map_f.
   - move => /orP.
     case.
-    + by move => /andP [] _ ->.
+    + move => /andP [] _.
+        by rewrite mem_map => // ? ? [] ->.
     + move: uniqueprf.
-      rewrite /types_unique /types map_cat cat_uniq.
+      rewrite /domain_unique /domain map_cat cat_uniq.
       move => /andP [] _ /andP [] _ /= /andP [] nin _ /hasP [] decl inprf /andP [] /eqP nameprf _.
       exfalso.
       move: nin.
         by rewrite /(_ \notin _) -nameprf map_f.
 Qed.
 
-Lemma ParentsWellFounded_acyclic_step: forall p i pi, types_unique p -> ParentsWellFounded i p -> has_parent p i pi -> i != pi.
+Lemma ParentsWellFounded_irrefl_step: forall p i pi, domain_unique p -> ParentsWellFounded i p -> has_parent p i pi -> i != pi.
 Proof.
   move => p i pi uniqueprf prf.
   move: prf uniqueprf.
@@ -368,16 +373,15 @@ Proof.
   apply: (introF eqP ).
   move => eqprf.
   move: uniqueprf.
-  rewrite /types_unique /types map_cat cat_uniq.
+  rewrite /domain_unique /domain map_cat cat_uniq.
   move => /andP [] _ /andP [] /=.
   rewrite eqprf.
   move: prf.
-  rewrite /types map_cat mem_cat.
+  rewrite /domain map_cat mem_cat.
     by move => /orP [] ->.
 Qed.
 
-
-Lemma ParentsWellFounded_ParentsDefined: forall p, types_unique p -> (forall i, i \in types p -> ParentsWellFounded i p) -> ParentsDefined p.
+Lemma ParentsWellFounded_ParentsDefined: forall p, domain_unique p -> (forall i, i \in domain p -> ParentsWellFounded i p) -> ParentsDefined p.
 Proof.
   move => p uniqueprf wfprf i pi /(clos_trans_t1n _ _ _ _) parentprf.
   move: parentprf uniqueprf wfprf.
@@ -388,8 +392,8 @@ Proof.
   move: (wfprf i iinprf) => iwfprf.
   move: iwfprf parentprf iinprf uniqueprf wfprf.
   move => [] decls1 decls2 pis ms piwfprf parentprf iinprf uniqueprf wfprf.
-  apply: (mem_subseq (s1 := types (Decls (decls1 ++ decls2)))).
-  - rewrite /types map_cat map_cat.
+  apply: (mem_subseq (s1 := domain (Decls (decls1 ++ decls2)))).
+  - rewrite /domain map_cat map_cat.
     apply: cat_subseq => //.
       by apply: subseq_cons.
   - apply: (ParentsWellFounded_defined).
@@ -399,7 +403,7 @@ Qed.
 
 Lemma HasParentTrans_strengthen: forall decls1 decls2 decl i pi,
     ~(HasParentTrans (Decls (decls1 ++ [:: decl & decls2])) (name decl) pi) ->
-    types_unique (Decls (decls1 ++ [:: decl & decls2])) ->
+    domain_unique (Decls (decls1 ++ [:: decl & decls2])) ->
     HasParentTrans (Decls (decls1 ++ [:: decl & decls2])) i pi ->
     HasParentTrans (Decls (decls1 ++ decls2)) i pi.
 Proof.
@@ -409,15 +413,163 @@ Proof.
   - move: i pi => _ _ i pi /hasP [] idecl ideclin /andP [] idecl_name piprf uniqueprf ndeclpi.
     constructor.
     rewrite /has_parent.
-    eapply elimT.
-    + apply: hasP.
-    apply: (rwP (hasP _ _)).
-    move: (hasP.
+    apply: (introT hasP).
+    exists idecl; [ | by apply: (introT andP) ].
+    move: ideclin.
+    rewrite /= mem_cat in_cons.
+    move => /orP []; [ | move => /orP [] ].
+    + rewrite mem_cat.
+        by move => ->.
+    + move => /eqP devil.
+      move: ndeclpi.
+      rewrite -devil.
+      move => ndeclpi.
+      exfalso.
+      apply: ndeclpi.
+      constructor.
+      rewrite /has_parent.
+      apply: (introT hasP).
+      exists idecl; [ | by apply: (introT andP) ].
+        by rewrite /= mem_cat in_cons eq_refl orbT.
+    + rewrite mem_cat.
+      move => ->.
+        by rewrite orbT.
+  - move: i pi => _ _ i mid pi imid ihimid midpi ihmidpi uniqueprf ndeclpi.
+    apply: (t_trans _ _ _ mid); [ | by apply ihmidpi ].
+    apply: ihimid => //.
+    move => devil.
+    apply: ndeclpi.
+      by apply: (t_trans _ _ _ mid).
+Qed.
+
+Lemma ParentsWellFounded_perm: forall p1 p2 i,
+    ParentsWellFounded i p1 ->
+    perm_eq (decls p1) (decls p2) ->
+    ParentsWellFounded i p2.
+Proof.
+  move => p1 p2 i wfprf.
+  move: p2.
+  elim: wfprf.
+  move: p1 i => _ _ i decls1 decls2 pis ms wfprf ih p2 permeq.
+  assert (p2_eq: exists decls1' decls2', p2 = Decls (decls1' ++ [:: Interface i (map TyRef pis) ms & decls2'])).
+  { assert (iin: Interface i (map TyRef pis) ms \in (decls (Decls (decls1 ++ [:: Interface i (map TyRef pis) ms & decls2])))).
+    { by rewrite /= mem_cat in_cons eq_refl orbT. }
+    move: permeq iin => /perm_mem ineq.
+    rewrite ineq.
+    clear ...
+    move: p2 => [].
+    elim => // decl decls ih.
+    rewrite in_cons .
+    move => /orP [].
+    - move => /eqP decl_eq.
+      exists [::], decls.
+        by rewrite decl_eq.
+    - move => /ih  [] decls1' [] decls2' [] eqprf.
+      exists [:: decl & decls1'], decls2'.
+      apply: f_equal.
+        by apply: f_equal. }
+  move: p2_eq => [] decls1' [] decls2' eqprf.
+  rewrite eqprf.
+  constructor.
+  move => pi piprf.
+  apply: ih => //.
+  rewrite -(perm_cons (Interface i (map TyRef pis) ms)).
+  apply: perm_trans; [ | apply: perm_trans; [ by exact: permeq | ]].
+  - rewrite /decls /=.
+      by move: (perm_catCA [:: Interface i (map TyRef pis) ms] decls1 decls2) => ->.
+  - rewrite eqprf.
+    rewrite /decls /=.
+      by move: (perm_catCA [:: Interface i (map TyRef pis) ms] decls1' decls2') => <-.
+Qed.
+
+Definition insert decl p := match p with | Decls decls => Decls [:: decl & decls] end.
+
+Lemma ParentsWellFounded_weaken: forall p decl i,
+    ParentsWellFounded i p ->
+    domain_unique (insert decl p) ->
+    ParentsWellFounded i (insert decl p).
+Proof.
+  move => p decl i.
+  elim.
+  move: i p => _ _ i decls1 decls2 ps ms wfprf ih uniqueprf.
+  rewrite /= -cat_cons.
+  constructor.
+  move => p inprf.
+  apply: ih => //.
+  rewrite /insert /= -cat_cons.
+  rewrite /domain_unique /domain map_cat cat_uniq.
+  apply: (introT andP).
+  move: uniqueprf.
+  rewrite /domain_unique /domain /insert -cat_cons map_cat cat_uniq.
+  move => /andP [] uniqueprf1 /andP [] nhasprf uniqueprf2.
+  split => //.
+  apply: (introT andP).
+  split.
+  - apply: (introN hasP).
+    move => [] x xindecls2 xindecldecls1.
+    move: nhasprf => /(elimN hasP) disprf.
+    apply: disprf.
+    exists x => //.
+      by rewrite map_cons in_cons xindecls2 orbT.
+  - move: uniqueprf2.
+    rewrite cons_uniq.
+      by move => /andP [] _ ->.
+Qed.
+
+Lemma insert_perm: forall decls1 decls2 decl,
+    perm_eq (decls (insert decl (Decls (decls1 ++ decls2)))) (decls (Decls (decls1 ++ [:: decl & decls2]))).
+Proof.
+  move => decls1 decls2 decl.
+    by rewrite /insert -cat_cons (perm_catCA [:: decl]).
+Qed.
+
+Lemma ParentsWellFounded_insert_somewhere: forall decls1 decls2 decl i,
+    ParentsWellFounded i (insert decl (Decls (decls1 ++ decls2))) ->
+    ParentsWellFounded i (Decls (decls1 ++ [:: decl & decls2])).
+Proof.
+  move => decls1 decls2 decl i /ParentsWellFounded_perm r.
+  apply: r.
+    by apply: insert_perm.
+Qed.
+
+Lemma ParentsWellFounded_nonempty: forall p i,
+    ParentsWellFounded i p ->
+    ~nilp (decls p).
+Proof.
+  move => p i.
+  case.
+  move => decls1 decls2 ps ms _.
+    by rewrite /= /nilp size_cat /= -addn1 addnA addn1  (gtn_eqF (ltn0Sn _)).
+Qed.
 
 
+(* TODO from here... 
 
-
+Lemma ParentsTrans_wf: forall decls1 decls2 decl pi,
+    HasParentTrans (Decls (decls1 ++ [:: decl & decls2])) (name decl) pi ->
+    types_unique (Decls (decls1 ++ [:: decl & decls2])) ->
+    ParentsWellFounded (name decl) (Decls (decls1 ++ [:: decl & decls2])) ->    
+    ParentsWellFounded pi (Decls (decls1 ++ decls2)).
+Proof.
+  move => decls1 decls2 decl pi.
+  set (remdecl := fun ds => match ds with | Decls decls => Decls ((take (length decls1) decls) ++ (drop (1 + length decls1) decls)) end).
+  assert (remdecl_eq: (Decls (decls1 ++ decls2) = remdecl (Decls (decls1 ++ decl :: decls2)))).
+  { rewrite /remdecl.
+      by rewrite take_cat ltnn subnn drop_cat (leq_gtF (leqnSn (length decls1))) (addnK (length decls1) 1) /= drop0 cats0. }
+  rewrite remdecl_eq.
+    - admit.
+    - rewrite /= leqnSn.
+    [ | rewrite /= ltnSn ]. -(ltn_predRL (length decls1) (length decls1)) ltn_pred0.
     
+
+  elim.
+  - move: pi => _ i pi ipi uniqueprf.
+  - move: pi => _ i mid pi _ ih1 _ ih2 uniqueprf wfprf.
+    apply: ih2 => //.
+    apply: ParentsWellFounded_weaken => //.
+      by apply: ih1 => //.
+Qed. 
+
 
 
 Lemma ParentsWellFounded_acyclic: forall p, types_unique p -> (forall i, i \in types p -> ParentsWellFounded i p) -> ParentsAcyclic p.
@@ -439,7 +591,20 @@ Proof.
     { apply: piswfprf.
       apply: has_parent_unique_in; [ by apply: uniqueprf | done ]. }
     assert (strong_pii: HasParentTrans (Decls (decls1 ++ decls2)) pi i).
-    { move: pii piwf uniqueprf.
+    { apply: (HasParentTrans_strengthen _ _ (Interface i pis ms)) => //.
+      move => /(clos_trans_t1n _ _ _ _) devil.
+      move: devil wfprf uniqueprf.
+      clear ...
+      rewrite /name.
+      case.
+      - move: i => _ i.
+      - move => 
+      move: devil => /clos_t1n_trans.
+      
+
+
+
+      move: pii piwf uniqueprf.
       clear.
       elim.
       - admit.
@@ -472,6 +637,7 @@ Definition mbody (p: Program) (t: Ty) (m: MName) :=
               
          ) decls
 
+*)
 
 
 
