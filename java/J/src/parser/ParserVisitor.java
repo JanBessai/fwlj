@@ -22,7 +22,7 @@ class ParserFailed extends RuntimeException{
 public class ParserVisitor implements JVisitor<Object>{
   List<String> cxs=List.of();
   List<String> mxs=List.of();
-  public static E.X freshX=new E.X("_toBeReplaced_");
+  public static final E.X freshX=new E.X("_toBeReplaced_");
   public StringBuilder errors=new StringBuilder();
   void check(ParserRuleContext ctx){  
     if(ctx.children!=null){return;}
@@ -56,9 +56,8 @@ public class ParserVisitor implements JVisitor<Object>{
     check(ctx);
     Optional<T>t=Optional.empty();
     if(ctx.t()!=null){t=Optional.of(visitT(ctx.t()));}
-    //t | t? '[' e ']' | t? '[' x* '|' e ']' | t? '[' mCall* ']';
-    // TODO: does [foo] means [x|x.foo()] or [foo] the local var?
-    // TODO: need transformation at the end to replace all the 'fresh variables'
+    // Note, [foo] means [foo] the local var, not [x|x.foo()]
+    // to disambiguate, parenthesis are kept in that sugar
     List<E.X> xs=ctx.e()==null?
       List.of(freshX):ctx.x().stream().map(x->visitX(x)).toList();
     E e=ctx.e()==null?

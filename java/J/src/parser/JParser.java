@@ -7,6 +7,7 @@ import java.nio.file.*;
 import org.antlr.v4.runtime.*;
 
 import ast.*;
+import op.*;
 
 public class JParser {
   public String codeFromPath(Path path) throws IOException{
@@ -29,7 +30,7 @@ public class JParser {
     var errorsP= errorsPB.toString();
     var hasErr=!errorsT.isEmpty() || !errorsP.isEmpty();
     if (hasErr){ throw new ParserFailed(errorsT+"\n"+errorsP); }
-    return res; 
+    return new ReplaceFreshXs().fixProgram(res); 
     }
   }  
 class FailConsole extends ConsoleErrorListener{

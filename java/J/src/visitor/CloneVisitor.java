@@ -2,6 +2,7 @@ package visitor;
 import java.util.List;
 
 import ast.*;
+import ast.Dec.*;
 
 public interface CloneVisitor {
   default E visitE(E e){return e.visitable().accept(this);}
@@ -27,12 +28,34 @@ public interface CloneVisitor {
   default T.CX visitCX(T.CX cx){return cx;}
   default T.MX visitMX(T.MX mx){return mx;}
  
-  default T.C visitC(T.C c){return c.accept(this);}
-  default Dec visitDec(Dec dec){return dec.accept(this);}
-  default Program visitProgram(Program p){return p.accept(this);}
-  default Dec.M visitM(Dec.M m){return m.accept(this);}
-  default Dec.MH visitMH(Dec.MH mh){return mh.accept(this);}
-  default Dec.S visitS(Dec.S s){return s.accept(this);}
+  default T.C visitC(T.C c){return c;}
+  default Dec visitDec(Dec dec){
+    var name=visitC(dec.name());
+    var gens=listR(dec.gens());
+    var supers=list(dec.supers());
+    var ms=listR(dec.ms());
+    return new Dec(name,gens,supers,ms);
+    }
+  default Program visitProgram(Program p){
+    var decs=listR(p.decs());
+    var main=visitE(p.main());
+    return new Program(decs,main);
+    }
+  default Dec.M visitM(Dec.M m){
+    var mh=visitMH(m.mH());
+    var e=m.e().map(this::visitE);
+    return new Dec.M(mh,e);
+    }
+  default Dec.MH visitMH(Dec.MH mh){
+    var s=visitS(mh.s());
+    var gens=listR(mh.gens());
+    var retType=visitT(mh.retType());
+    var m=visitX(mh.m());
+    var ts=list(mh.ts());
+    var xs=listR(mh.xs());
+    return new Dec.MH(s,gens,retType,m,ts,xs);
+    }
+  default Dec.S visitS(Dec.S s){return s;}
 
   default <K> K mapping(Visitable.Root<K> v){
     return v.visitable().accept(this);
