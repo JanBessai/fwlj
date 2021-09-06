@@ -7,9 +7,9 @@ import op.*;
 public class Main {
   public static void main(String[]a){    
     Program p=new parser.JParser().program(Path.of("Dummy.txt"),s);
-    var res=new ToSource().of(p);
-    System.out.println(res);
-    var resJ=new ToJava("Main").of(p);
+    //var res=new ToSource().of(p);
+    //System.out.println(res);
+    var resJ=new ToJava("MainOut").of(p);
     System.out.println(resJ);
     }
   
@@ -109,7 +109,7 @@ public class Main {
         Bool eq(Bool other);
         <T> T match(F0<T> onTrue,F0<T> onFalse);
         }
-      False:Bool{
+      False:Bool,Tuple0{
         True checkTrue = this.checkTrue;
         Bool and(Bool other) = this;
         Bool or(Bool other) = other;
@@ -117,7 +117,7 @@ public class Main {
         Bool eq(Bool other) = other.not;
         <T> T match(F0<T> onTrue,F0<T> onFalse) = onFalse.apply;
         }
-      True:Bool{
+      True:Bool,Tuple0{
         True checkTrue = this;
         Bool and(Bool other) = other;
         Bool or(Bool other) = this;
@@ -158,8 +158,8 @@ public class Main {
       Union2B<A,B>:Union2<A,B>{ B toB; }
       Selector2<A,B>:{ Union2<A,B> new(A a, B b); }
       Tuple2<A,B>:{
-        A _1 = this.toUnion( [a,b|FromA<A,B>[a]] ).toA;
-        B _2 = this.toUnion( [a,b|FromB<A,B>[b]] ).toA;
+        A _1 = this.toUnion( [a,b|Union2A<A,B>[a]] ).toA;
+        B _2 = this.toUnion( [a,b|Union2B<A,B>[b]] ).toB;
         Union2<A,B> toUnion(Selector2<A,B> s);
         }
       Tuples:Tuple0{
@@ -171,7 +171,7 @@ public class Main {
         Cons<T> push(T e) = [new(e,this)];
         <R> List<R> map(F1<T,R> f) = [];
         }
-      Cons<T>:Tuple2{
+      Cons<T>:List<T>,Tuple2<T,List<T>>{
         Void dummy(Void x) = x;
         <R> R match(F0<R> onEmpty,F1<Cons<T>,R> onCons) = onCons.apply(this);
         Bool isEmpty = False;

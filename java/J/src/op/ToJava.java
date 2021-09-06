@@ -86,6 +86,7 @@ public class ToJava extends AbstractToString{
     c("\n  }\n");
     }
   public void visitM(Dec.M m){
+    m.e().ifPresent(e->c("default "));
     visitMH(m.mH());
     m.e().ifPresentOrElse(e->{
       c("{\n    return ");
