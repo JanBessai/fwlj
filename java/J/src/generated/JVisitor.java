@@ -71,6 +71,12 @@ public interface JVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitGens(JParser.GensContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link JParser#gensT}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitGensT(JParser.GensTContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link JParser#mDec}.
 	 * @param ctx the parse tree
 	 * @return the visitor result

@@ -13,6 +13,7 @@ public interface CollectorVisitor {
   default void visitMCall(E.MCall m){
     visitE(m.receiver());
     visitX(m.m());
+    list(m.gensT());
     list(m.es());
     }  
   default void visitT(T t){t.visitable().accept(this);}

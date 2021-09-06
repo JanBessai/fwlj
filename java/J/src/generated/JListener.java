@@ -108,6 +108,16 @@ public interface JListener extends ParseTreeListener {
 	 */
 	void exitGens(JParser.GensContext ctx);
 	/**
+	 * Enter a parse tree produced by {@link JParser#gensT}.
+	 * @param ctx the parse tree
+	 */
+	void enterGensT(JParser.GensTContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link JParser#gensT}.
+	 * @param ctx the parse tree
+	 */
+	void exitGensT(JParser.GensTContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link JParser#mDec}.
 	 * @param ctx the parse tree
 	 */

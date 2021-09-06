@@ -16,8 +16,9 @@ public interface CloneVisitor {
   default E.MCall visitMCall(E.MCall m){
     var r=visitE(m.receiver());
     var name=visitX(m.m());
+    var gensT=list(m.gensT());
     var es=list(m.es());
-    return new E.MCall(r,name,es);
+    return new E.MCall(r,name,gensT,es);
     }  
   default T visitT(T t){return t.visitable().accept(this);}
   default T.CT visitCT(T.CT ct){

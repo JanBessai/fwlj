@@ -14,7 +14,7 @@ public sealed interface E extends Visitable.Root<E>{
     public void accept(CollectorVisitor v) {v.visitL(this);}
     public Visitable<L> visitable(){return this;}
     }
-  record MCall(E receiver,X m,List<E>es) implements E,Visitable.Record<MCall,E>{
+  record MCall(E receiver,X m,List<T> gensT,List<E>es) implements E,Visitable.Record<MCall,E>{
     public MCall accept(CloneVisitor v){return v.visitMCall(this);}
     public void accept(CollectorVisitor v) {v.visitMCall(this);}
     public Visitable<MCall> visitable(){return this;}

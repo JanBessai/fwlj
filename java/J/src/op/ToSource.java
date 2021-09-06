@@ -8,13 +8,7 @@ import java.util.stream.*;
 import ast.*;
 import visitor.*;
 
-public class ToSource implements CollectorVisitor{
-  public String of(Visitable.Root<?> v){
-    v.visitable().accept(this);
-    return this.res.toString();
-    }
-  StringBuilder res=new StringBuilder();
-  void c(String s){res.append(s);}
+public class ToSource extends AbstractToString{
   public void visitX(E.X x){c(x.s());}
   public void visitCX(T.CX cx){c(cx.s());}
   public void visitMX(T.MX mx){c(mx.s());}
@@ -58,6 +52,11 @@ public class ToSource implements CollectorVisitor{
     visitE(m.receiver());
     c(".");
     visitX(m.m());
+    if(!m.gensT().isEmpty()){
+      c("<");
+      list(m.gensT());
+      c(">");
+      }
     if(!m.es().isEmpty()){
       c("(");
       list(m.es());
@@ -93,6 +92,7 @@ public class ToSource implements CollectorVisitor{
       c(" = \n    ");
       visitE(e);
       });
+    c(";");
     }
   public void visitMH(Dec.MH mh){
     visitS(mh.s());

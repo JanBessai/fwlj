@@ -24,13 +24,17 @@ public class ReplaceFreshXs implements CloneVisitor{
   }
   @Override public E.L visitL(E.L l){
     l=CloneVisitor.super.visitL(l);
+    if(l.e()==ParserVisitor.freshX){
+      var x=freshX();
+      return new E.L(l.t(),List.of(x),x);
+      }
     if(!(l.e() instanceof E.MCall mc)){ return l; }
     var skip = l.xs().size()!=1 
       || mc.receiver()!=l.xs().get(0)
       || mc.receiver()!=ParserVisitor.freshX;
     if(skip){return l;}
     var x=freshX();
-    mc=new MCall(x,mc.m(),mc.es());
+    mc=new MCall(x,mc.m(),mc.gensT(),mc.es());
     return new E.L(l.t(),List.of(x),mc);
     }
   }

@@ -71,7 +71,8 @@ public class ParserVisitor implements JVisitor<Object>{
     check(ctx);
     E.X m=visitX(ctx.x());
     List<E> es=ctx.e().stream().map(e->visitE(e)).toList();
-    return new E.MCall(rec, m, es);
+    List<T> gensT=visitGensT(ctx.gensT());
+    return new E.MCall(rec, m, gensT, es);
     }
   @Override public E visitNudeE(NudeEContext ctx) {
     check(ctx);
@@ -86,9 +87,12 @@ public class ParserVisitor implements JVisitor<Object>{
     return new T.CT(new T.C(c),ts);
     }
   @Override public List<String> visitGens(GensContext ctx) {
-    if(ctx.children!=null){return List.of();}
-    //check(ctx);
+    if(ctx.children==null){return List.of();}
     return ctx.C().stream().map(c->c.getText()).toList();
+    }
+  @Override public List<T> visitGensT(GensTContext ctx) {
+    if(ctx.children==null){return List.of();}
+    return ctx.t().stream().map(t->visitT(t)).toList();
     }
   @Override public Dec.MH visitMH(MHContext ctx) {
     check(ctx);
