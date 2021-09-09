@@ -3,33 +3,27 @@ Set Bullet Behavior "Strict Subproofs".
 Import EqNotations.
 Require Import Relations.Relation_Operators.
 Require Import Relations.Operators_Properties.
+Require Import Coq.Arith.Wf_nat.
 
 Variable IName: countType.
 Variable MName: countType.
 
+(* Standard elimination scheme is not enough cause of nested inductive type seq.
+   Will manually recover it later, when \in is available with eqType instance. *)
 Unset Elimination Schemes.
 Inductive Ty : Type :=
 | TyRef : IName -> seq Ty -> Ty
 | ClassTyVar : nat -> Ty
 | MethodTyVar : nat -> Ty.
+Set Elimination Schemes.
 
-Fixpoint Ty_rec (t: Ty):
-  forall P : Ty -> Type,
-    (forall (i : IName) (args : seq Ty), map P args -> P (TyRef i args)) ->
-    (forall n : nat, P (ClassTyVar n)) ->
-    (forall n : nat, P (MethodTyVar n)) -> forall t : Ty, P t. :=
-  match t with
-  | TyRef i args =>
-
-
+Inductive Signature : Type :=
+| MethodHeader: nat -> Ty -> MName -> seq Ty -> Signature.
 
 Inductive Expression : Type :=
 | Var: nat -> Expression
 | MethodCall: Expression -> MName -> Expression -> Expression
 | Lambda: Ty -> Expression -> Expression.
-
-Inductive Signature : Type :=
-| MethodHeader: nat -> Ty -> MName -> Ty -> Signature.
 
 Inductive MethodDeclaration: Type :=
 | AbstractMethod: Signature -> MethodDeclaration
@@ -64,11 +58,20 @@ Section MathcompInstances.
 
   Lemma pcan_Ty2Tree: pcancel Ty2Tree Tree2Ty.
   Proof.
-    elim => //= i args.
-    apply: f_equal.
-    apply: f_equal.
-
-      by case.
+    rewrite /pcancel.
+    fix ih 1.
+    case.
+    - move => i /=.
+      elim; [ done | ].
+      move => arg args ih_args /=.
+      rewrite (ih arg) /=.
+      set (ins := fun x => match x with | Some (TyRef i args) => Some (TyRef i [:: arg & args]) | _ => None end).
+      rewrite -/(ins (Some (TyRef i args))) -/(ins (Some (TyRef i (pmap Tree2Ty (map Ty2Tree args))))).
+        by rewrite ih_args.
+    - move => n /=.
+        by constructor.
+    - move => n /=.
+        by constructor.
   Qed.
 
   Definition Ty_eqMixin := PcanEqMixin pcan_Ty2Tree.
@@ -111,14 +114,22 @@ Section MathcompInstances.
   Definition Expression_countMixin := PcanCountMixin pcan_Expression2Tree.
   Canonical Expression_countType := CountType Expression Expression_countMixin. 
 
-  Definition Signature2Tree (s: Signature): GenTree.tree (Ty + MName) :=
+  Definition Signature2Tree (s: Signature): GenTree.tree (nat + Ty + MName + seq Ty) :=
     match s with
-    | MethodHeader r m s => GenTree.Node 0 [:: GenTree.Leaf (inl r); GenTree.Leaf (inr m); GenTree.Leaf (inl s)]
+    | MethodHeader n r m s =>
+      GenTree.Node 0 [:: GenTree.Leaf (inl (inl (inl n)));
+                     GenTree.Leaf (inl (inl (inr r)));
+                     GenTree.Leaf (inl (inr m));
+                     GenTree.Leaf (inr s)]
     end.
 
-  Definition Tree2Signature (t: GenTree.tree (Ty + MName)): option Signature :=
+  Definition Tree2Signature (t: GenTree.tree (nat + Ty + MName + seq Ty)): option Signature :=
     match t with
-    | GenTree.Node 0 [:: GenTree.Leaf (inl r); GenTree.Leaf (inr m); GenTree.Leaf (inl s)] => Some (MethodHeader r m s)
+    | GenTree.Node 0 [:: GenTree.Leaf (inl (inl (inl n)));
+                     GenTree.Leaf (inl (inl (inr r)));
+                     GenTree.Leaf (inl (inr m));
+                     GenTree.Leaf (inr s)] =>
+      Some (MethodHeader n r m s)
     | _ => None
     end.
 
@@ -159,14 +170,22 @@ Section MathcompInstances.
   Definition MethodDeclaration_countMixin := PcanCountMixin pcan_MethodDeclaration2Tree.
   Canonical MethodDeclaration_countType := CountType MethodDeclaration MethodDeclaration_countMixin.
 
-  Definition Declaration2Tree (d: Declaration): GenTree.tree (IName + seq Ty + seq MethodDeclaration) :=
+  Definition Declaration2Tree (d: Declaration): GenTree.tree (IName + nat + seq Ty + seq MethodDeclaration) :=
     match d with
-    | Interface i ps ms => GenTree.Node 0 [:: GenTree.Leaf (inl (inl i)); GenTree.Leaf (inl (inr ps)); GenTree.Leaf (inr ms)]
+    | Interface i n ps ms =>
+      GenTree.Node 0 [:: GenTree.Leaf (inl (inl (inl i)));
+                     GenTree.Leaf (inl (inl (inr n)));
+                     GenTree.Leaf (inl (inr ps));
+                     GenTree.Leaf (inr ms)]
     end.
 
-  Definition Tree2Declaration (t: GenTree.tree (IName + seq Ty + seq MethodDeclaration)): option Declaration :=
+  Definition Tree2Declaration (t: GenTree.tree (IName + nat + seq Ty + seq MethodDeclaration)): option Declaration :=
     match t with
-    | GenTree.Node 0 [:: GenTree.Leaf (inl (inl i)); GenTree.Leaf (inl (inr ps)); GenTree.Leaf (inr ms)]  => Some (Interface i ps ms)
+    | GenTree.Node 0 [:: GenTree.Leaf (inl (inl (inl i)));
+                     GenTree.Leaf (inl (inl (inr n)));
+                     GenTree.Leaf (inl (inr ps));
+                     GenTree.Leaf (inr ms)]  =>
+      Some (Interface i n ps ms)
     | _ => None
     end.
 
@@ -229,6 +248,99 @@ Section MathcompInstances.
   Canonical Value_countType := CountType Value Value_countMixin.
 End MathcompInstances.
 
+Section TyAndSigEliminationSchemes.
+  Fixpoint Ty_rect (P : Ty -> Type)
+           (Ref_case: forall (i : IName) (args : seq Ty), (forall arg, arg \in args -> P arg) -> P (TyRef i args))
+           (ClassTyVar_case: forall n : nat, P (ClassTyVar n))
+           (MethodTyVar_case: forall n : nat, P (MethodTyVar n))
+           (ty : Ty): P ty :=
+    match ty with
+    | TyRef i args =>
+      Ref_case i args ((fix arg_rec args arg :=
+                          match args as args return arg \in args -> P arg with
+                          | [::] => fun inprf => False_rect _ (not_false_is_true inprf)
+                          | [:: arg' & args] =>
+                            fun inprf =>
+                              match arg == arg' as r return r || (arg \in args) -> (r = (arg' == arg)) -> P arg  with
+                              | true => fun here eq => rew [P] (eqP (rew eq in here)) in
+                                           Ty_rect P Ref_case ClassTyVar_case MethodTyVar_case arg'
+                              | false => fun there _ => arg_rec args arg there
+                              end inprf (eq_sym _ _)
+                          end) args)
+    | ClassTyVar n => ClassTyVar_case n
+    | MethodTyVar n => MethodTyVar_case n
+    end.
+
+  Definition Ty_rec: forall (P : Ty -> Set)
+                       (Ref_case: forall (i : IName) (args : seq Ty), (forall arg, arg \in args -> P arg) -> P (TyRef i args))
+                       (ClassTyVar_case: forall n : nat, P (ClassTyVar n))
+                       (MethodTyVar_case: forall n : nat, P (MethodTyVar n))
+                       (ty : Ty), P ty := Ty_rect.
+
+  Definition Ty_ind: forall (P : Ty -> Prop)
+                       (Ref_case: forall (i : IName) (args : seq Ty), (forall arg, arg \in args -> P arg) -> P (TyRef i args))
+                       (ClassTyVar_case: forall n : nat, P (ClassTyVar n))
+                       (MethodTyVar_case: forall n : nat, P (MethodTyVar n))
+                       (ty : Ty), P ty := Ty_rect.
+
+  Fixpoint ty_size (ty: Ty): nat :=
+    match ty with
+    | TyRef _ args => 1 + (sumn (map ty_size args))
+    | _ => 1
+    end.
+
+  Definition Ty_size_rect (P : Ty -> Type)
+             (caseLT: forall ty, (forall ty', ty_size ty' < ty_size ty -> P ty') -> P ty)
+             (ty : Ty): P ty :=
+    induction_ltof2 Ty ty_size P
+                    (fun ty ih => caseLT ty (fun ty' prf => ih ty' (elimT ltP prf))) ty.
+
+  Definition Ty_size_rec: forall (P : Ty -> Set)
+             (caseLT: forall ty, (forall ty', ty_size ty' < ty_size ty -> P ty') -> P ty)
+             (ty : Ty), P ty := Ty_size_rect.
+
+  Definition Ty_size_ind: forall (P : Ty -> Prop)
+             (caseLT: forall ty, (forall ty', ty_size ty' < ty_size ty -> P ty') -> P ty)
+             (ty : Ty), P ty := Ty_size_rect.
+
+  Definition arity (sig: Signature): nat :=
+    match sig with
+    | MethodHeader _ _ _ args => size args
+    end.
+
+  Definition Signature_arity_rect (P : Signature -> Type)
+           (Method_case: forall (sig: Signature), (forall sig', arity sig' < arity sig -> P sig') -> P sig)
+           (sig: Signature): P sig :=
+    induction_ltof2 Signature arity P
+                    (fun sig ih => Method_case sig (fun sig' prf => ih sig' (elimT ltP prf))) sig.
+
+Definition Signature_param_rec: forall (P : Signature -> Set)
+           (Method_case: forall (sig: Signature), (forall sig', arity sig' < arity sig -> P sig') -> P sig)
+           (sig: Signature), P sig := Signature_arity_rect.
+
+  Definition Signature_param_ind: forall (P : Signature -> Prop)
+           (Method_case: forall (sig: Signature), (forall sig', arity sig' < arity sig -> P sig') -> P sig)
+           (sig: Signature), P sig := Signature_arity_rect.
+
+  Definition generic_arity (sig: Signature): nat :=
+    match sig with
+    | MethodHeader n _ _ _ => n
+    end.
+
+  Definition Signature_generic_arity_rect (P : Signature -> Type)
+           (Method_case: forall (sig: Signature), (forall sig', generic_arity sig' < generic_arity sig -> P sig') -> P sig)
+           (sig: Signature): P sig :=
+    induction_ltof2 Signature generic_arity P
+                    (fun sig ih => Method_case sig (fun sig' prf => ih sig' (elimT ltP prf))) sig.
+
+  Definition Signature_generic_arity_rec: forall (P : Signature -> Set)
+           (Method_case: forall (sig: Signature), (forall sig', generic_arity sig' < generic_arity sig -> P sig') -> P sig)
+           (sig: Signature), P sig := Signature_generic_arity_rect.
+
+  Definition Signature_generic_arity_ind: forall (P : Signature -> Prop)
+           (Method_case: forall (sig: Signature), (forall sig', generic_arity sig' < generic_arity sig -> P sig') -> P sig)
+           (sig: Signature), P sig := Signature_generic_arity_rect.
+End TyAndSigEliminationSchemes.
 
 (* exp is the hole of the context *)
 Inductive EvalCtx (exp: Expression): Type :=
@@ -240,27 +352,36 @@ Definition TypeCtx : Type := seq Ty.
 Definition typeof (v: Value) : Ty :=
   match v with | VLambda i _ => i end.
 
+Definition iname (ty: Ty): option IName :=
+  match ty with
+  | TyRef i _ => Some i
+  | _ => None
+  end.
+
+Definition i_generic_arity (decl: Declaration): nat :=
+  match decl with | Interface _ n _ _ => n end.
+
 Definition domain (p: Program): seq IName :=
   match p with
-  | Decls decls => map (fun d => match d with Interface i _ _ => i end) decls
+  | Decls decls => map (fun d => match d with Interface i _ _ _ => i end) decls
   end.
 
 Definition decls (p: Program): seq Declaration :=
   match p with | Decls decls => decls end.
 
 Definition mdecls (i: Declaration): seq MethodDeclaration :=
-  match i with | Interface _ _ mdecls => mdecls end.
+  match i with | Interface _ _ _ mdecls => mdecls end.
 
 Definition name (decl: Declaration): IName :=
-  match decl with | Interface i _ _ => i end.
+  match decl with | Interface i _ _ _ => i end.
 
 Definition parents (decl: Declaration): seq Ty :=
-  match decl with | Interface _ pis _ => pis end.
+  match decl with | Interface _ _ pis _ => pis end.
 
 Definition mname (mdecl: MethodDeclaration): MName :=
   match mdecl with
-  | AbstractMethod (MethodHeader _ m _) => m
-  | DefaultMethod (MethodHeader _ m _) _ => m
+  | AbstractMethod (MethodHeader _ _ m _) => m
+  | DefaultMethod (MethodHeader _ _ m _) _ => m
   end.
 
 Definition signatures (i: Declaration): seq Signature :=
@@ -269,394 +390,321 @@ Definition signatures (i: Declaration): seq Signature :=
                  | DefaultMethod sig _ => sig
                  end) (mdecls i).
 
+Fixpoint substitute (classTyArgs: seq Ty) (methodTyArgs: seq Ty) (ty: Ty): Ty :=
+  match ty with
+  | TyRef i args => TyRef i (map (substitute classTyArgs methodTyArgs) args)
+  | ClassTyVar n => nth (ClassTyVar n) classTyArgs n
+  | MethodTyVar n => nth (MethodTyVar n) classTyArgs n
+  end.
+
+Inductive SubtypeStep (p: Program): Ty -> Ty -> Prop :=
+| SubtypeStep_Parent:
+    forall i pis ibody pi ppis pibody iargs piargs,
+      ((Interface i (size iargs) pis ibody) \in (decls p)) ->
+      ((Interface pi (size piargs) ppis pibody) \in (decls p)) ->
+      ((TyRef pi piargs) \in pis) ->
+      SubtypeStep p (TyRef i iargs) (TyRef pi (map (substitute iargs [::]) piargs)).
+
+Definition Subtype (p: Program): Ty -> Ty -> Prop := clos_refl_trans Ty (SubtypeStep p).
+
+Section SubtypeProperties.
+
+  Definition SubtypeStep_inv {p: Program} {ty ty': Ty} (st: SubtypeStep p ty ty') :=
+    let diag ty ty' :=
+        match ty with
+        | TyRef i iargs =>
+          forall (X: Program -> IName -> seq Ty -> Ty -> Prop),
+            (forall pis ibody pi ppis pibody piargs,
+                ((Interface i (size iargs) pis ibody) \in (decls p)) ->
+                ((Interface pi (size piargs) ppis pibody) \in (decls p)) ->
+                ((TyRef pi piargs) \in pis) ->
+                X p i iargs (TyRef pi (map (substitute iargs [::]) piargs))) ->
+            X p i iargs ty'
+        | _ => False
+        end in
+    match st in SubtypeStep _ ty ty' return diag ty ty' with
+    | SubtypeStep_Parent i pis ibody pi ppis pibody iargs piargs iprf piprf pi_in_pis =>
+      fun X k => k pis ibody pi ppis pibody piargs iprf piprf pi_in_pis
+    end.
+
+  Inductive InheritanceChain (p: Program): seq IName -> Prop :=
+  | InheritanceChain_start: forall i, InheritanceChain p [:: i]
+  | InheritanceChain_step:
+      forall i n pis ibody pi args ppis,
+        ((Interface i n pis ibody) \in (decls p)) ->
+        ((TyRef pi args) \in pis) ->
+        InheritanceChain p [:: pi & ppis] ->
+        InheritanceChain p [:: i, pi & ppis].
+
+  Definition InheritanceChain_inv {p: Program} {chain: seq IName} (ic: InheritanceChain p chain) :=
+    let diag chain :=
+        match chain with
+        | [:: i] =>
+          forall (X: Program -> IName -> Prop), X p i -> X p i
+        | [:: i, pi & chain'] =>
+          forall (X: Program -> IName -> IName -> seq IName -> Prop),
+            (forall n pis ibody args ppis,
+                ((Interface i n pis ibody) \in (decls p)) ->
+                ((TyRef pi args) \in pis) ->
+                InheritanceChain p [:: pi & ppis] ->
+                X p i pi ppis) ->
+            X p i pi chain'
+        | _ => False
+        end in
+    match ic in InheritanceChain _ chain return diag chain with
+    | InheritanceChain_start i => fun X k => k
+    | InheritanceChain_step i n pis ibody pi args ppis inprf pi_in_pis piprf =>
+      fun X k => k n pis ibody args ppis inprf pi_in_pis piprf
+    end.
+
+  Lemma Subtype_InheritanceChain: forall p i args ty',
+      Subtype p (TyRef i args) ty' ->
+      exists chain,
+        iname (TyRef i args) = ohead chain /\
+        iname ty' = ohead (rev chain) /\
+        InheritanceChain p chain.
+  Proof.
+    move => p i args ty' /(clos_rt_rt1n _ _ _ _).
+    set (P ty ty' :=
+           match ty with
+           | TyRef i args =>
+             exists chain,
+               iname (TyRef i args) = ohead chain /\
+               iname ty' = ohead (rev chain) /\
+               InheritanceChain p chain
+           | _ => True
+           end).
+    rewrite -/(P (TyRef i args) ty').
+    elim.
+    - case => //.
+      move: i args => _ _ i args.
+      exists [:: i].
+      do 2 (split => //=).
+        by constructor.
+    - move: i args ty' => _ _ _ ty pty ppty /SubtypeStep_inv.
+      case: ty => // i iargs inv.
+      apply inv.
+      move => pis ibody pi ppis pibody piargs iprf piprf pi_in_pis trans [] chain [] head_eq [] last_eq is_chain.
+      exists [:: i & chain].
+      do 2 (split => //=).
+      + rewrite last_eq.
+        move: head_eq.
+        clear...
+        rewrite (rev_cat [:: i]).
+        move: i [:: i] => _.
+        move: pi.
+        elim: chain => //= pi chain ih pi' chain' pieq.
+        move: ih.
+        case: chain => // ppi chain ih.
+        rewrite (rev_cat [:: pi]) -catA.
+        rewrite -(ih ppi [:: pi]) => //.
+        rewrite -rev_cat.
+          by rewrite (ih ppi (chain' ++ [::pi])) => //.
+      + move: head_eq last_eq is_chain.
+        case: chain => //= pi' chain.
+        case => pi_eq last_eq pichain.
+        rewrite -pi_eq.
+        econstructor; [ eassumption | eassumption | ].
+          by rewrite pi_eq.
+  Qed.
+
+  Lemma InheritanceChain_cat: forall p chain1 i chain2,
+      InheritanceChain p (chain1 ++ [:: i]) ->
+      InheritanceChain p [:: i & chain2] ->
+      InheritanceChain p (chain1 ++ [:: i & chain2]).
+  Proof.
+    move => p.
+    elim => // i chain1 ih pi chain2 ch1.
+    move: ch1 ih => /InheritanceChain_inv.
+    case: chain1 => /=.
+    - move => inv.
+      apply inv.
+      move => n pis ibody args ppis inprf pi_in_pis pichain ih pichain'.
+        by econstructor; eassumption.
+    - move => pi1 chain1 inv ih pichain2.
+      rewrite (catA chain1 [:: pi] chain2).
+      move: ih (ih pi chain2) => _.
+      rewrite (catA chain1 [::pi] chain2).
+      apply inv.
+      move => n pis ibody args ppis iprf pi1_in_pis pi1chain ih.
+      econstructor; [ eassumption | eassumption | ].
+        by apply: ih.
+  Qed.
+
+  Definition Strict {A : Type} (P : A -> A -> Prop) := forall x y, P x y -> P y x -> x = y.
+
+  Lemma ohead_rev: forall {A: Type} (x: A) (s: seq A), ohead (rev (s ++ [:: x])) = Some x.
+  Proof.
+    move => A x s.
+      by rewrite rev_cat.
+  Qed.
+
+  Lemma Subtype_args_eq: forall p i args1 args2,
+      (forall chain, InheritanceChain p chain -> uniq chain) ->
+      Subtype p (TyRef i args1) (TyRef i args2) ->
+      args1 = args2.
+  Proof.
+    move => p i args1 args2 uniqprf.
+    move: {1 3}(TyRef i args2) (eq_refl (TyRef i args2)) => B /eqP B_eq /(clos_rt_rt1n _ _ _ _) prf.
+    move: B_eq.
+    case: prf.
+    - by move => [].
+    - move: B => _ B C /SubtypeStep_inv inv.
+      apply inv.
+      move: inv => _ pis ibody pi ppis pibody piargs iprf piprf piinpis.
+      move => /(clos_rt1n_rt _ _ _ _) /(Subtype_InheritanceChain) chainprops eqprf.
+      move: chainprops.
+      rewrite eqprf.
+      move => [] chain [] chainprops.
+      assert (chain_ipi: InheritanceChain p [:: i; pi]).
+      { by econstructor; [ eassumption | eassumption | constructor ]. }
+      move: chainprops.
+      case: chain => //= i' chain /= [] <- [] chain_tail chainprf.
+      move: (InheritanceChain_cat _ [::i] _ _ chain_ipi chainprf) => /uniqprf.
+      rewrite cat_uniq => /andP [] _ /andP [] /hasP [].
+      exists i.
+      + move: chain_tail.
+        clear ...
+        case /lastP: chain => /=.
+        * move => [] ->.
+            by rewrite in_cons eq_refl.
+        * move => chain i'.
+          rewrite (rev_cat [::pi]) rev_rcons /=.
+          move => [] ->.
+            by rewrite in_cons mem_rcons in_cons eq_refl orbT.
+      + by rewrite /= in_cons eq_refl.
+  Qed.
+
+  Lemma Subtype_inames_ineq: forall p i1 i2 args1 args2,
+      (forall chain, InheritanceChain p chain -> uniq chain) ->
+      Subtype p (TyRef i1 args1) (TyRef i2 args2) ->
+      ~(i1 = i2) \/ (TyRef i1 args1 = TyRef i2 args2).
+  Proof.
+    move => p i1 i2 args1 args2 uniqprf.
+    case: (i1 == i2) /eqP.
+    - move => -> /(Subtype_args_eq _ _ _ _ uniqprf) ->.
+        by right.
+    - move => ? _.
+        by left.
+  Qed.
+
+  Definition uniform (A B: Ty): bool :=
+    match A, B with
+    | TyRef _ _, TyRef _ _ => true
+    | ClassTyVar _, ClassTyVar _ => true
+    | MethodTyVar _, MethodTyVar _ => true
+    | _, _ => false
+    end.
+
+  Lemma Subtype_uniform:
+    forall p A B, Subtype p A B -> uniform A B.
+  Proof.
+    move => p A B /(clos_rt_rt1n _ _ _ _).
+    elim.
+    - by case.
+    - move: A B => _ _ A B C /SubtypeStep_inv.
+      case: A => // i iargs inv /(clos_rt1n_rt _ _ _ _).
+      rewrite -/(Subtype p).
+      apply inv.
+        by case C.
+  Qed.
+
+  Lemma UniqueInheritance_Strict:
+    forall p, (forall chain, InheritanceChain p chain -> uniq chain) -> Strict (Subtype p).
+  Proof.
+    move => p uniqprf A B.
+    case: A.
+    - case: B.
+      + move => pi piargs i iargs ipi pii.
+        case: (Subtype_inames_ineq _ _ _ _ _ uniqprf ipi) => // ineq.
+        exfalso.
+        have: (Some pi = iname (TyRef pi piargs)); [ done | ].
+        move: ipi ineq (Subtype_uniform _ _ _ ipi) pii => /(clos_rt_rt1n _ _ _ _).
+        case.
+        * move => disprf _ _ [] /eqP.
+            by rewrite eq_sym => /eqP /disprf.
+        * move => B C /SubtypeStep_inv inv.
+          apply inv.
+          move: inv => _ pis ibody pi' ppis pibody piargs' iprf pi'prf pi'inpis /(clos_rt1n_rt _ _ _ _).
+          move => /Subtype_InheritanceChain [] chain chainprf.
+          assert (ipichain: InheritanceChain p [:: i; pi']).
+          { by econstructor; [ eassumption | eassumption | constructor ]. }
+          move: chainprf => [].
+          case: chain => //= ? chain [] <- [].
+          case: C => // ppi ppiargs ppichain pi'chain ineq _ /Subtype_InheritanceChain.
+          move => [] []; first by case.
+          move => ? chain2 [] [] <- [] ppichain2 ppichain2prf [] pi_ppi_eq.
+          assert (ipi'chain: InheritanceChain p [:: i, pi' & chain]).
+          { by apply: (InheritanceChain_cat p [:: i]). }
+          assert (ipi'chainchain2: InheritanceChain p [:: i, pi' & chain ++ chain2]).
+          { rewrite -cat_cons -cat_cons.
+            move: ppichain ipi'chain ppichain2prf.
+            clear ...
+            case /lastP: chain.
+            - move => [] -> p1 p2.
+              rewrite cat_cons.
+                by apply: (InheritanceChain_cat _ [:: i]).
+            - move => chain ?.
+              rewrite rev_cons rev_rcons => /= [] [] <-.
+              rewrite -cats1 -cat_cons -cat_cons -catA -cat_cons -cat_cons.
+              move => p1 p2.
+                by apply: InheritanceChain_cat. }
+          move: (uniqprf _ ipi'chainchain2).
+          rewrite -cat_cons -cat_cons cat_uniq.
+          move => /andP [] _ /andP [] /hasP devil _.
+          apply: devil.
+          exists i.
+          ** move: ppichain2 pi_ppi_eq ineq.
+             clear ...
+             case /lastP: chain2.
+             *** by move => [] -> ->.
+             *** move => chain2 i'.
+                 rewrite rev_cons rev_rcons mem_rcons in_cons => /= [] [] ->.
+                   by rewrite eq_refl.
+          ** by rewrite /= in_cons eq_refl.
+      + by move => ? ? ? /Subtype_uniform.
+      + by move => ? ? ? /Subtype_uniform.
+    - move => n /(clos_rt_rt1n _ _ _ _).
+        by case => //= ? ? /SubtypeStep_inv.
+    - move => n /(clos_rt_rt1n _ _ _ _).
+        by case => //= ? ? /SubtypeStep_inv.
+  Qed.
+
+End SubtypeProperties.
+
 Inductive HasDefault (p: Program) (i: IName) (m: MName): Expression -> Prop :=
-| HasDefault_Here: forall pis mdecls r s e,
-    ((Interface i pis mdecls) \in decls p) ->
-    ((DefaultMethod (MethodHeader r m s) e) \in mdecls) ->
+| HasDefault_Here: forall ni pis mdecls r nm s e,
+    ((Interface i ni pis mdecls) \in decls p) ->
+    ((DefaultMethod (MethodHeader r nm m s) e) \in mdecls) ->
     HasDefault p i m e.
 
-Definition has_parent (p: Program) (i: IName) (pi: IName): bool :=
-  has (fun decl => (name decl == i) && (TyRef pi \in parents decl)) (decls p).
-
-Definition HasParentTrans (p: Program): IName -> IName -> Prop :=
-  clos_trans _ (has_parent p).
-
-Definition ST (p: Program): IName -> IName -> Prop :=
-  clos_refl _ (HasParentTrans p).
-
-Inductive MBody (p: Program) (i: IName) (m: MName): IName -> Expression -> Prop :=
-| MBody_Here: forall e, HasDefault p i m e -> MBody p i m i e
-| MBody_Parent: forall pi ppi e,
+Inductive MBody (p: Program) (m: MName): Ty -> Ty -> Expression -> Prop :=
+| MBody_Here: forall i args e, HasDefault p i m e -> MBody p m (TyRef i args) (TyRef i args) e
+| MBody_Parent: forall i iargs pi ppi e,
     (~HasDefault p i m e) ->
-    has_parent p i pi ->
-    MBody p pi m ppi e ->
-    MBody p i m ppi e.
+    Subtype p (TyRef i iargs) pi ->
+    MBody p m pi ppi e ->
+    MBody p m (TyRef i iargs) ppi e.
 
 Definition method_names_unique_in_types (p: Program): bool :=
   all (fun decl => uniq (map mname (mdecls decl))) (decls p).
+
 Definition domain_unique (p: Program): bool := uniq (domain p).
 
 Definition DiamondResolved (p: Program): Prop :=
-  forall i m pi1 pi2 ppi1 ppi2 e1 e2,
-    has_parent p i pi1 ->
-    has_parent p i pi2 ->
-    MBody p pi1 m ppi1 e1 ->
-    MBody p pi2 m ppi2 e2 ->
+  forall i iargs m pi1 pi2 ppi1 ppi2 e1 e2,
+    SubtypeStep p (TyRef i iargs) pi1 ->
+    SubtypeStep p (TyRef i iargs) pi2 ->
+    MBody p m pi1 ppi1 e1 ->
+    MBody p m pi2 ppi2 e2 ->
     (ppi1 = ppi2) \/ (exists e, HasDefault p i m e).
 
 Definition OverridesCompatible (p: Program): Prop :=
-  forall decl_sub decl_super m r1 r2 s,
-    HasParentTrans p (name decl_sub) (name decl_super) ->
-    (MethodHeader (TyRef r1) m (TyRef s) \in signatures decl_sub) ->
-    (MethodHeader (TyRef r2) m (TyRef s) \in signatures decl_super) ->
-    HasParentTrans p r2 r1.
-
-Inductive ParentsWellFounded (i: IName): Program -> Prop :=
-| PWF : forall decls1 decls2 pis ms,
-    (forall pi, pi \in pis -> ParentsWellFounded pi (Decls (decls1 ++ decls2))) ->
-    ParentsWellFounded i (Decls (decls1 ++ [:: Interface i (map TyRef pis) ms & decls2])).
-
-Definition ParentsAcyclic (p: Program): Prop :=
-  forall i pi, HasParentTrans p i pi -> ~HasParentTrans p pi i.
-
-Definition ParentsDefined (p: Program): Prop := forall i pi, HasParentTrans p i pi -> pi \in domain p.
-
-Lemma has_parent_defined: forall p i pi, has_parent p i pi -> i \in domain p.
-Proof.
-  case.
-  elim => // [] [] i1 pis1 mdecls decls IH i pi.
-  rewrite /has_parent /=.
-  move => /orP [].
-  - move => /andP [] /eqP -> _.
-      by rewrite in_cons eq_refl.
-  - move => /IH.
-    rewrite in_cons.
-    move => ->.
-      by rewrite orbT.
-Qed.
-
-Lemma HasParentTrans_defined: forall p i pi, HasParentTrans p i pi -> i \in domain p.
-Proof.
-  move => p i pi.
-  elim => //.
-    by apply: has_parent_defined.
-Qed.
-
-Lemma ParentsWellFounded_defined: forall p i, ParentsWellFounded i p -> i \in domain p.
-Proof.
-  move => p i [] decls1 decls2 ps ms _.
-    by rewrite /domain map_cat mem_cat /= in_cons eq_refl orbT.
-Qed.
-
-Lemma has_parent_unique_in:
-  forall decls1 decls2 i pi pis mdecls,
-    domain_unique (Decls (decls1 ++ Interface i (map TyRef pis) mdecls :: decls2)) ->
-    has_parent (Decls (decls1 ++ Interface i (map TyRef pis) mdecls :: decls2)) i pi ->
-    pi \in pis.
-Proof.
-  move => decls1 decls2 i pi pis mdecls uniqueprf.
-  rewrite /has_parent has_cat /=.
-  move => /orP.
-  case.
-  - move: uniqueprf.
-    rewrite /domain_unique /domain map_cat cat_uniq.
-    move => /andP [] _ /andP [] disprf _.
-    move: disprf.
-    rewrite map_cons /=.
-    move => /negbTE /orP disprf.
-    move => /hasP [] decl inprf /andP [] nameprf _.
-    exfalso.
-    apply: disprf.
-    left.
-    rewrite -(eqP nameprf).
-      by apply map_f.
-  - move => /orP.
-    case.
-    + move => /andP [] _.
-        by rewrite mem_map => // ? ? [] ->.
-    + move: uniqueprf.
-      rewrite /domain_unique /domain map_cat cat_uniq.
-      move => /andP [] _ /andP [] _ /= /andP [] nin _ /hasP [] decl inprf /andP [] /eqP nameprf _.
-      exfalso.
-      move: nin.
-        by rewrite /(_ \notin _) -nameprf map_f.
-Qed.
-
-Lemma ParentsWellFounded_irrefl_step: forall p i pi, domain_unique p -> ParentsWellFounded i p -> has_parent p i pi -> i != pi.
-Proof.
-  move => p i pi uniqueprf prf.
-  move: prf uniqueprf.
-  elim.
-  move: i => _ i decls1 decls2 pis ms wfprf _ uniqueprf /(has_parent_unique_in _ _ _ _ _ _ uniqueprf) /wfprf /ParentsWellFounded_defined prf.
-  apply: negbT.
-  apply: (introF eqP ).
-  move => eqprf.
-  move: uniqueprf.
-  rewrite /domain_unique /domain map_cat cat_uniq.
-  move => /andP [] _ /andP [] /=.
-  rewrite eqprf.
-  move: prf.
-  rewrite /domain map_cat mem_cat.
-    by move => /orP [] ->.
-Qed.
-
-Lemma ParentsWellFounded_ParentsDefined: forall p, domain_unique p -> (forall i, i \in domain p -> ParentsWellFounded i p) -> ParentsDefined p.
-Proof.
-  move => p uniqueprf wfprf i pi /(clos_trans_t1n _ _ _ _) parentprf.
-  move: parentprf uniqueprf wfprf.
-  elim => //.
-  move: i pi => _ _ i pi parentprf.
-  move: (has_parent_defined _ _ pi parentprf) => iinprf.
-  move => uniqueprf wfprf.
-  move: (wfprf i iinprf) => iwfprf.
-  move: iwfprf parentprf iinprf uniqueprf wfprf.
-  move => [] decls1 decls2 pis ms piwfprf parentprf iinprf uniqueprf wfprf.
-  apply: (mem_subseq (s1 := domain (Decls (decls1 ++ decls2)))).
-  - rewrite /domain map_cat map_cat.
-    apply: cat_subseq => //.
-      by apply: subseq_cons.
-  - apply: (ParentsWellFounded_defined).
-    apply: piwfprf.
-      by apply: has_parent_unique_in; [ by exact uniqueprf | done ].
-Qed.
-
-Lemma HasParentTrans_strengthen: forall decls1 decls2 decl i pi,
-    ~(HasParentTrans (Decls (decls1 ++ [:: decl & decls2])) (name decl) pi) ->
-    domain_unique (Decls (decls1 ++ [:: decl & decls2])) ->
-    HasParentTrans (Decls (decls1 ++ [:: decl & decls2])) i pi ->
-    HasParentTrans (Decls (decls1 ++ decls2)) i pi.
-Proof.
-  move => decls1 decls2 decl i pi ndeclpi uniqueprf ipi.
-  move: ipi uniqueprf ndeclpi.
-  elim.
-  - move: i pi => _ _ i pi /hasP [] idecl ideclin /andP [] idecl_name piprf uniqueprf ndeclpi.
-    constructor.
-    rewrite /has_parent.
-    apply: (introT hasP).
-    exists idecl; [ | by apply: (introT andP) ].
-    move: ideclin.
-    rewrite /= mem_cat in_cons.
-    move => /orP []; [ | move => /orP [] ].
-    + rewrite mem_cat.
-        by move => ->.
-    + move => /eqP devil.
-      move: ndeclpi.
-      rewrite -devil.
-      move => ndeclpi.
-      exfalso.
-      apply: ndeclpi.
-      constructor.
-      rewrite /has_parent.
-      apply: (introT hasP).
-      exists idecl; [ | by apply: (introT andP) ].
-        by rewrite /= mem_cat in_cons eq_refl orbT.
-    + rewrite mem_cat.
-      move => ->.
-        by rewrite orbT.
-  - move: i pi => _ _ i mid pi imid ihimid midpi ihmidpi uniqueprf ndeclpi.
-    apply: (t_trans _ _ _ mid); [ | by apply ihmidpi ].
-    apply: ihimid => //.
-    move => devil.
-    apply: ndeclpi.
-      by apply: (t_trans _ _ _ mid).
-Qed.
-
-Lemma ParentsWellFounded_perm: forall p1 p2 i,
-    ParentsWellFounded i p1 ->
-    perm_eq (decls p1) (decls p2) ->
-    ParentsWellFounded i p2.
-Proof.
-  move => p1 p2 i wfprf.
-  move: p2.
-  elim: wfprf.
-  move: p1 i => _ _ i decls1 decls2 pis ms wfprf ih p2 permeq.
-  assert (p2_eq: exists decls1' decls2', p2 = Decls (decls1' ++ [:: Interface i (map TyRef pis) ms & decls2'])).
-  { assert (iin: Interface i (map TyRef pis) ms \in (decls (Decls (decls1 ++ [:: Interface i (map TyRef pis) ms & decls2])))).
-    { by rewrite /= mem_cat in_cons eq_refl orbT. }
-    move: permeq iin => /perm_mem ineq.
-    rewrite ineq.
-    clear ...
-    move: p2 => [].
-    elim => // decl decls ih.
-    rewrite in_cons .
-    move => /orP [].
-    - move => /eqP decl_eq.
-      exists [::], decls.
-        by rewrite decl_eq.
-    - move => /ih  [] decls1' [] decls2' [] eqprf.
-      exists [:: decl & decls1'], decls2'.
-      apply: f_equal.
-        by apply: f_equal. }
-  move: p2_eq => [] decls1' [] decls2' eqprf.
-  rewrite eqprf.
-  constructor.
-  move => pi piprf.
-  apply: ih => //.
-  rewrite -(perm_cons (Interface i (map TyRef pis) ms)).
-  apply: perm_trans; [ | apply: perm_trans; [ by exact: permeq | ]].
-  - rewrite /decls /=.
-      by move: (perm_catCA [:: Interface i (map TyRef pis) ms] decls1 decls2) => ->.
-  - rewrite eqprf.
-    rewrite /decls /=.
-      by move: (perm_catCA [:: Interface i (map TyRef pis) ms] decls1' decls2') => <-.
-Qed.
-
-Definition insert decl p := match p with | Decls decls => Decls [:: decl & decls] end.
-
-Lemma ParentsWellFounded_weaken: forall p decl i,
-    ParentsWellFounded i p ->
-    domain_unique (insert decl p) ->
-    ParentsWellFounded i (insert decl p).
-Proof.
-  move => p decl i.
-  elim.
-  move: i p => _ _ i decls1 decls2 ps ms wfprf ih uniqueprf.
-  rewrite /= -cat_cons.
-  constructor.
-  move => p inprf.
-  apply: ih => //.
-  rewrite /insert /= -cat_cons.
-  rewrite /domain_unique /domain map_cat cat_uniq.
-  apply: (introT andP).
-  move: uniqueprf.
-  rewrite /domain_unique /domain /insert -cat_cons map_cat cat_uniq.
-  move => /andP [] uniqueprf1 /andP [] nhasprf uniqueprf2.
-  split => //.
-  apply: (introT andP).
-  split.
-  - apply: (introN hasP).
-    move => [] x xindecls2 xindecldecls1.
-    move: nhasprf => /(elimN hasP) disprf.
-    apply: disprf.
-    exists x => //.
-      by rewrite map_cons in_cons xindecls2 orbT.
-  - move: uniqueprf2.
-    rewrite cons_uniq.
-      by move => /andP [] _ ->.
-Qed.
-
-Lemma insert_perm: forall decls1 decls2 decl,
-    perm_eq (decls (insert decl (Decls (decls1 ++ decls2)))) (decls (Decls (decls1 ++ [:: decl & decls2]))).
-Proof.
-  move => decls1 decls2 decl.
-    by rewrite /insert -cat_cons (perm_catCA [:: decl]).
-Qed.
-
-Lemma ParentsWellFounded_insert_somewhere: forall decls1 decls2 decl i,
-    ParentsWellFounded i (insert decl (Decls (decls1 ++ decls2))) ->
-    ParentsWellFounded i (Decls (decls1 ++ [:: decl & decls2])).
-Proof.
-  move => decls1 decls2 decl i /ParentsWellFounded_perm r.
-  apply: r.
-    by apply: insert_perm.
-Qed.
-
-Lemma ParentsWellFounded_nonempty: forall p i,
-    ParentsWellFounded i p ->
-    ~nilp (decls p).
-Proof.
-  move => p i.
-  case.
-  move => decls1 decls2 ps ms _.
-    by rewrite /= /nilp size_cat /= -addn1 addnA addn1  (gtn_eqF (ltn0Sn _)).
-Qed.
-
-
-(* TODO from here... 
-
-Lemma ParentsTrans_wf: forall decls1 decls2 decl pi,
-    HasParentTrans (Decls (decls1 ++ [:: decl & decls2])) (name decl) pi ->
-    types_unique (Decls (decls1 ++ [:: decl & decls2])) ->
-    ParentsWellFounded (name decl) (Decls (decls1 ++ [:: decl & decls2])) ->    
-    ParentsWellFounded pi (Decls (decls1 ++ decls2)).
-Proof.
-  move => decls1 decls2 decl pi.
-  set (remdecl := fun ds => match ds with | Decls decls => Decls ((take (length decls1) decls) ++ (drop (1 + length decls1) decls)) end).
-  assert (remdecl_eq: (Decls (decls1 ++ decls2) = remdecl (Decls (decls1 ++ decl :: decls2)))).
-  { rewrite /remdecl.
-      by rewrite take_cat ltnn subnn drop_cat (leq_gtF (leqnSn (length decls1))) (addnK (length decls1) 1) /= drop0 cats0. }
-  rewrite remdecl_eq.
-    - admit.
-    - rewrite /= leqnSn.
-    [ | rewrite /= ltnSn ]. -(ltn_predRL (length decls1) (length decls1)) ltn_pred0.
-    
-
-  elim.
-  - move: pi => _ i pi ipi uniqueprf.
-  - move: pi => _ i mid pi _ ih1 _ ih2 uniqueprf wfprf.
-    apply: ih2 => //.
-    apply: ParentsWellFounded_weaken => //.
-      by apply: ih1 => //.
-Qed. 
-
-
-
-Lemma ParentsWellFounded_acyclic: forall p, types_unique p -> (forall i, i \in types p -> ParentsWellFounded i p) -> ParentsAcyclic p.
-Proof.
-  move => p uniqueprf wfprf i pi parentprf.
-  move: parentprf uniqueprf wfprf.
-  move => /(clos_trans_t1n _ _ _ _).
-  elim.
-  - move: i pi => _ _ i pi ipi uniqueprf wfprf pii.
-    move: (wfprf i (has_parent_defined _ _ _ ipi)) => pwfi.
-    move: pwfi pii wfprf uniqueprf ipi => [] decls1 decls2 pis ms piswfprf pii wfprf uniqueprf ipi.
-  (* TODO: show this part:
-     show that parents of p are wellfounded using piswfprf
-     strengthen pii to be HasParentTrans (Delcs (decls1 ++ decls2)) pi i
-     conclude that i must be declared in decls1 ++ decls2
-     disprf using uniqueprf.
-   *)
-    assert (piwf: ParentsWellFounded pi (Decls (decls1 ++ decls2))).
-    { apply: piswfprf.
-      apply: has_parent_unique_in; [ by apply: uniqueprf | done ]. }
-    assert (strong_pii: HasParentTrans (Decls (decls1 ++ decls2)) pi i).
-    { apply: (HasParentTrans_strengthen _ _ (Interface i pis ms)) => //.
-      move => /(clos_trans_t1n _ _ _ _) devil.
-      move: devil wfprf uniqueprf.
-      clear ...
-      rewrite /name.
-      case.
-      - move: i => _ i.
-      - move => 
-      move: devil => /clos_t1n_trans.
-      
-
-
-
-      move: pii piwf uniqueprf.
-      clear.
-      elim.
-      - admit.
-      - 
-
-    
-
-  - (* DONE. *)
-    move: i pi => _ _ i pi ppi parentprf pparentprf ih uniqueprf wfprf.
-    move: (ih uniqueprf wfprf) => disprf.
-    move: ih => _ /(clos_trans_t1n _ _ _ _) devil.
-    move: devil disprf parentprf pparentprf.
-    case.
-    + move => mid ppimid disprf midpi _.
-      apply: disprf.
-      apply: (t_trans _ _ _ mid); by constructor.
-    + move => mid1 mid2 ppimid1 mid1mid2 disprf mid2pi _.
-      apply: disprf.
-      apply: (t_trans _ _ _ mid1); [ by constructor | ].
-      apply: (t_trans _ _ _ mid2); [ | by constructor ].
-        by apply: clos_t1n_trans.
-Qed.
-
-Definition mbody (p: Program) (t: Ty) (m: MName) :=
-  match p with
-  | Decls decls =>
-    omap (fun decl =>
-            match decl with
-            | Interface i exts body => 
-              
-         ) decls
-
-*)
+  forall decl_sub decl_super tyargs1 tyargs2 m n r1 r2 s1 s2,
+    Subtype p (TyRef (name decl_sub) tyargs1) (TyRef (name decl_super) tyargs2) ->
+    (MethodHeader n r1 m s1 \in signatures decl_sub) ->
+    (MethodHeader n r2 m s2 \in signatures decl_super) ->
+    Subtype p r2 r1 /\ (map (substitute tyargs1 [::]) s1 = map (substitute tyargs2 [::]) s2).
 
 
 
