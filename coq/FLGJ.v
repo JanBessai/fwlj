@@ -15,15 +15,15 @@ Inductive Ty : Type :=
 | TyRef : IName -> seq Ty -> Ty
 | ClassTyVar : nat -> Ty
 | MethodTyVar : nat -> Ty.
+
+Inductive Expression : Type :=
+| Var: nat -> Expression
+| MethodCall: Expression -> MName -> seq Expression -> Expression
+| Lambda: Ty -> nat -> Expression -> Expression.
 Set Elimination Schemes.
 
 Inductive Signature : Type :=
 | MethodHeader: nat -> Ty -> MName -> seq Ty -> Signature.
-
-Inductive Expression : Type :=
-| Var: nat -> Expression
-| MethodCall: Expression -> MName -> Expression -> Expression
-| Lambda: Ty -> Expression -> Expression.
 
 Inductive MethodDeclaration: Type :=
 | AbstractMethod: Signature -> MethodDeclaration
@@ -36,7 +36,7 @@ Inductive Program : Type :=
 | Decls: seq Declaration -> Program.
 
 Inductive Value : Type :=
-| VLambda : Ty -> Expression -> Value.
+| VLambda : Ty -> nat -> Expression -> Value.
 
 
 Section MathcompInstances.
@@ -81,30 +81,42 @@ Section MathcompInstances.
   Definition Ty_countMixin := PcanCountMixin pcan_Ty2Tree.
   Canonical Ty_countType := CountType Ty Ty_countMixin.
 
-  Fixpoint Expression2Tree (e: Expression): GenTree.tree (nat + Ty + MName) :=
+  Fixpoint Expression2Tree (e: Expression): GenTree.tree (nat + seq Ty + MName) :=
     match e with
     | Var n => GenTree.Node 0 [:: GenTree.Leaf (inl (inl n))]
-    | MethodCall o m arg => GenTree.Node 1 [:: Expression2Tree o; GenTree.Leaf (inr m); Expression2Tree arg]
-    | Lambda i e => GenTree.Node 2 [:: GenTree.Leaf (inl (inr i)); Expression2Tree e]
+    | MethodCall o m args => GenTree.Node 1 [:: Expression2Tree o, GenTree.Leaf (inr m) & map Expression2Tree args]
+    | Lambda i n e => GenTree.Node 2 [:: GenTree.Leaf (inl (inr [:: i])); GenTree.Leaf (inl (inl n)); Expression2Tree e]
     end.
 
-  Fixpoint Tree2Expression (t: GenTree.tree (nat + Ty + MName)): option Expression :=
+  Fixpoint Tree2Expression (t: GenTree.tree (nat + seq Ty + MName)): option Expression :=
     match t with
     | GenTree.Node 0 [:: GenTree.Leaf (inl (inl n))] => Some (Var n)
-    | GenTree.Node 1 [:: ot; GenTree.Leaf (inr m); argt] =>
-      if Tree2Expression ot is Some o then
-        if Tree2Expression argt is Some arg then
-          Some (MethodCall o m arg)
-        else None
+    | GenTree.Node 1 [:: ot, GenTree.Leaf (inr m) & args] =>
+      if Tree2Expression ot is Some o
+      then Some (MethodCall o m (pmap Tree2Expression args))
       else None
-    | GenTree.Node 2 [:: GenTree.Leaf (inl (inr i)); et] =>
-      if Tree2Expression et is Some e then Some (Lambda i e) else None
+    | GenTree.Node 2 [:: GenTree.Leaf (inl (inr [:: i])); GenTree.Leaf (inl (inl n)); et] =>
+      if Tree2Expression et is Some e then Some (Lambda i n e) else None
+
     | _ => None
     end.
 
   Lemma pcan_Expression2Tree: pcancel Expression2Tree Tree2Expression.
   Proof.
-    elim => //=; by [ move => ? -> ? ? -> | move => ? ? -> ].
+    rewrite /pcancel.
+    fix ih 1.
+    case.
+    - move => n /=.
+        by exact: (refl_equal (Some (Var n))).
+    - move => e m args /=.
+      rewrite (ih e).
+      apply: f_equal.
+      apply: f_equal.
+      elim: args; [ done | ].
+      move => arg args ih'.
+        by rewrite /= ih ih'.
+    - move => i n e /=.
+        by rewrite (ih e).
   Qed.
 
   Definition Expression_eqMixin := PcanEqMixin pcan_Expression2Tree.
@@ -224,14 +236,14 @@ Section MathcompInstances.
   Definition Program_countMixin := PcanCountMixin pcan_Program2Tree.
   Canonical Program_countType := CountType Program Program_countMixin.
 
-  Definition Value2Tree (p: Value): GenTree.tree (Ty + Expression) :=
+  Definition Value2Tree (p: Value): GenTree.tree (Ty + nat + Expression) :=
     match p with
-    | VLambda i e => GenTree.Node 0 [:: GenTree.Leaf (inl i); GenTree.Leaf (inr e)]
+    | VLambda i n e => GenTree.Node 0 [:: GenTree.Leaf (inl (inl i)); GenTree.Leaf (inl (inr n)); GenTree.Leaf (inr e)]
     end.
 
-  Definition Tree2Value (t: GenTree.tree (Ty + Expression)): option Value :=
+  Definition Tree2Value (t: GenTree.tree (Ty + nat + Expression)): option Value :=
     match t with
-    | GenTree.Node 0 [:: GenTree.Leaf (inl i); GenTree.Leaf (inr e)] => Some (VLambda i e)
+    | GenTree.Node 0 [:: GenTree.Leaf (inl (inl i)); GenTree.Leaf (inl (inr n));  GenTree.Leaf (inr e)] => Some (VLambda i n e)
     | _ => None
     end.
 
@@ -248,7 +260,7 @@ Section MathcompInstances.
   Canonical Value_countType := CountType Value Value_countMixin.
 End MathcompInstances.
 
-Section TyAndSigEliminationSchemes.
+Section RecursiveEliminationSchemes.
   Fixpoint Ty_rect (P : Ty -> Type)
            (Ref_case: forall (i : IName) (args : seq Ty), (forall arg, arg \in args -> P arg) -> P (TyRef i args))
            (ClassTyVar_case: forall n : nat, P (ClassTyVar n))
@@ -303,6 +315,63 @@ Section TyAndSigEliminationSchemes.
              (caseLT: forall ty, (forall ty', ty_size ty' < ty_size ty -> P ty') -> P ty)
              (ty : Ty), P ty := Ty_size_rect.
 
+  Fixpoint Expression_rect (P: Expression -> Type)
+           (Var_case: forall n, P (Var n))
+           (MethodCall_case: forall e m args, P e -> (forall arg, arg \in args -> P arg) -> P (MethodCall e m args))
+           (Lambda_case: forall i n e, P e -> P (Lambda i n e))
+           (e: Expression): P e :=
+    match e with
+    | Var n => Var_case n
+    | MethodCall e m args =>
+      MethodCall_case e m args
+                      (Expression_rect P Var_case MethodCall_case Lambda_case e)
+                      ((fix arg_rec args arg :=
+                          match args as args return arg \in args -> P arg with
+                          | [::] => fun inprf => False_rect _ (not_false_is_true inprf)
+                          | [:: arg' & args] =>
+                            fun inprf =>
+                              match arg == arg' as r return r || (arg \in args) -> (r = (arg' == arg)) -> P arg  with
+                              | true => fun here eq => rew [P] (eqP (rew eq in here)) in
+                                           Expression_rect P Var_case MethodCall_case Lambda_case arg'
+                              | false => fun there _ => arg_rec args arg there
+                              end inprf (eq_sym _ _)
+                          end) args)
+    | Lambda i n e => Lambda_case i n e (Expression_rect P Var_case MethodCall_case Lambda_case e)
+    end.
+
+  Definition Expression_ind: forall (P: Expression -> Prop)
+           (Var_case: forall n, P (Var n))
+           (MethodCall_case: forall e m args, P e -> (forall arg, arg \in args -> P arg) -> P (MethodCall e m args))
+           (Lambda_case: forall i n e, P e -> P (Lambda i n e))
+           (e: Expression), P e := Expression_rect.
+
+  Definition Expression_rec: forall (P: Expression -> Set)
+           (Var_case: forall n, P (Var n))
+           (MethodCall_case: forall e m args, P e -> (forall arg, arg \in args -> P arg) -> P (MethodCall e m args))
+           (Lambda_case: forall i n e, P e -> P (Lambda i n e))
+           (e: Expression), P e := Expression_rect.
+
+  Fixpoint exp_size (e: Expression): nat :=
+    match e with
+    | Var n => 1
+    | MethodCall e m args => 1 + exp_size e + (sumn (map exp_size args))
+    | Lambda i n e => 1 + exp_size e
+    end.
+
+  Definition Expression_size_rect (P : Expression -> Type)
+             (caseLT: forall e, (forall e', exp_size e' < exp_size e -> P e') -> P e)
+             (e : Expression): P e :=
+    induction_ltof2 Expression exp_size P
+                    (fun e ih => caseLT e (fun e' prf => ih e' (elimT ltP prf))) e.
+
+  Definition Expression_size_rec: forall (P : Expression -> Set)
+             (caseLT: forall e, (forall e', exp_size e' < exp_size e -> P e') -> P e)
+             (e : Expression), P e := Expression_size_rect.
+
+  Definition Expression_size_ind: forall (P : Expression -> Prop)
+             (caseLT: forall e, (forall e', exp_size e' < exp_size e -> P e') -> P e)
+             (e : Expression), P e := Expression_size_rect.
+
   Definition arity (sig: Signature): nat :=
     match sig with
     | MethodHeader _ _ _ args => size args
@@ -314,7 +383,7 @@ Section TyAndSigEliminationSchemes.
     induction_ltof2 Signature arity P
                     (fun sig ih => Method_case sig (fun sig' prf => ih sig' (elimT ltP prf))) sig.
 
-Definition Signature_param_rec: forall (P : Signature -> Set)
+  Definition Signature_param_rec: forall (P : Signature -> Set)
            (Method_case: forall (sig: Signature), (forall sig', arity sig' < arity sig -> P sig') -> P sig)
            (sig: Signature), P sig := Signature_arity_rect.
 
@@ -340,17 +409,17 @@ Definition Signature_param_rec: forall (P : Signature -> Set)
   Definition Signature_generic_arity_ind: forall (P : Signature -> Prop)
            (Method_case: forall (sig: Signature), (forall sig', generic_arity sig' < generic_arity sig -> P sig') -> P sig)
            (sig: Signature), P sig := Signature_generic_arity_rect.
-End TyAndSigEliminationSchemes.
+End RecursiveEliminationSchemes.
 
 (* exp is the hole of the context *)
 Inductive EvalCtx (exp: Expression): Type :=
-| EvalCallReceiver : MName -> Expression -> EvalCtx exp
-| EvalCallArg : Value -> MName -> EvalCtx exp.
+| EvalCallReceiver : MName -> seq Expression -> EvalCtx exp
+| EvalCallArg : Value -> MName -> seq Value -> seq Expression -> EvalCtx exp.
 
 Definition TypeCtx : Type := seq Ty.
 
 Definition typeof (v: Value) : Ty :=
-  match v with | VLambda i _ => i end.
+  match v with | VLambda i _ _ => i end.
 
 Definition iname (ty: Ty): option IName :=
   match ty with
@@ -678,13 +747,49 @@ Inductive HasDefault (p: Program) (i: IName) (m: MName): Expression -> Prop :=
     ((DefaultMethod (MethodHeader r nm m s) e) \in mdecls) ->
     HasDefault p i m e.
 
-Inductive MBody (p: Program) (m: MName): Ty -> Ty -> Expression -> Prop :=
-| MBody_Here: forall i args e, HasDefault p i m e -> MBody p m (TyRef i args) (TyRef i args) e
-| MBody_Parent: forall i iargs pi ppi e,
-    (~HasDefault p i m e) ->
-    Subtype p (TyRef i iargs) pi ->
-    MBody p m pi ppi e ->
-    MBody p m (TyRef i iargs) ppi e.
+Definition has_default (p: Program) (i: IName) (m: MName) (e: Expression): bool :=
+  has (fun decl =>
+         (name decl == i) &&
+         has (fun mdecl => if mdecl is DefaultMethod (MethodHeader r nm m' s) e' then (m == m') && (e == e') else false)
+             (mdecls decl))
+      (decls p).
+
+Lemma HasDefaultP: forall p i m e, reflect (HasDefault p i m e) (has_default p i m e).
+Proof.
+  move => p i m e.
+  move: {1 3}(has_default p i m e) (refl_equal (has_default p i m e)).
+  case.
+  - move => defaultprf.
+    constructor.
+    move: defaultprf (sym_equal defaultprf) => _.
+    rewrite /has_default.
+    move => /hasP [] [] i' ni pis mdecls iinprf /andP [] /= /eqP i_eq /hasP [] [] //= [] r nm m' s e' minprf /andP [] /eqP m_eq /eqP e_eq.
+    econstructor.
+    + rewrite -i_eq; by exact iinprf.
+    + rewrite m_eq e_eq; by exact minprf.
+  - move => disprf.
+    constructor.
+    move => prf.
+    move: disprf.
+    case: prf.
+    move: e => _ ni pis mdecls r nm s e iinprf minprf.
+    rewrite /has_default.
+    move => /(@sym_equal _ _ _) /negbT /negP disprf.
+    apply: disprf.
+    apply: introT; [ by apply: hasP | ].
+    eexists; [ by exact iinprf | ].
+    rewrite eq_refl /=.
+    apply: introT; [ by apply: hasP | ].
+    eexists; [ by exact minprf | ].
+      by rewrite /= eq_refl eq_refl.
+Qed.
+
+Definition MBody (p: Program) (m: MName) (from: IName) (defining: IName) (e: Expression): Prop :=
+  exists (chain: seq IName),
+    InheritanceChain p (chain ++ [:: defining]) /\
+    from = head defining chain /\
+    HasDefault p defining m e /\
+    all (fun i => ~~(has_default p i m e)) chain.
 
 Definition method_names_unique_in_types (p: Program): bool :=
   all (fun decl => uniq (map mname (mdecls decl))) (decls p).
@@ -692,12 +797,10 @@ Definition method_names_unique_in_types (p: Program): bool :=
 Definition domain_unique (p: Program): bool := uniq (domain p).
 
 Definition DiamondResolved (p: Program): Prop :=
-  forall i iargs m pi1 pi2 ppi1 ppi2 e1 e2,
-    SubtypeStep p (TyRef i iargs) pi1 ->
-    SubtypeStep p (TyRef i iargs) pi2 ->
-    MBody p m pi1 ppi1 e1 ->
-    MBody p m pi2 ppi2 e2 ->
-    (ppi1 = ppi2) \/ (exists e, HasDefault p i m e).
+  forall i pi1 pi2 m e1 e2,
+    MBody p m i pi1 e1 ->
+    MBody p m i pi2 e2 ->
+    pi1 = pi2 /\ e1 = e2.
 
 Definition OverridesCompatible (p: Program): Prop :=
   forall decl_sub decl_super tyargs1 tyargs2 m n r1 r2 s1 s2,
