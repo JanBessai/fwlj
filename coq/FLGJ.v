@@ -5,8 +5,10 @@ Require Import Relations.Relation_Operators.
 Require Import Relations.Operators_Properties.
 Require Import Coq.Arith.Wf_nat.
 
-Variable IName: countType.
-Variable MName: countType.
+Require Import Names.
+
+Definition IName: countType := UserIdent_countType.
+Definition MName: countType := UserIdent_countType.
 
 (* Standard elimination scheme is not enough cause of nested inductive type seq.
    Will manually recover it later, when \in is available with eqType instance. *)

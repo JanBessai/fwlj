@@ -1,2 +1,4 @@
 -R . FLGJ 
+./Names.v
 ./FLGJ.v
+./Example.v
