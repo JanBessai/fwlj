@@ -47,16 +47,16 @@ Definition Bool: Declaration :=
 Definition IFalse: Declaration :=
   Interface (Name "False") 0 [:: BoolTy; Typle0Ty ]
             [:: (DefaultMethod (MethodHeader 0 TrueTy (Name "checkTrue") [::])
-                              (MethodCall (Var 0) (Name "checkTrue") [::]))
+                              (MethodCall (Var 0) (Name "checkTrue") [::] [::]))
              ; DefaultMethod (MethodHeader 0 BoolTy (Name "and") [:: BoolTy]) (Var 0)
              ; DefaultMethod (MethodHeader 0 BoolTy (Name "or") [:: BoolTy]) (Var 1)
              ; (DefaultMethod (MethodHeader 0 BoolTy (Name "not") [::])
                               (Lambda TrueTy 1 (Var 1)))
              ; (DefaultMethod (MethodHeader 0 BoolTy (Name "eq") [:: BoolTy])
-                              (MethodCall (Var 1) (Name "not") [::]))
+                              (MethodCall (Var 1) (Name "not") [::] [::]))
              ; (DefaultMethod (MethodHeader 1 (MethodTyVar 0) (Name "match")
                                             [:: F0Ty (MethodTyVar 0); F0Ty (MethodTyVar 0) ])
-                              (MethodCall (Var 2) (Name "apply") [::]))
+                              (MethodCall (Var 2) (Name "apply") [::] [::]))
             ].
 
 Definition ITrue: Declaration :=
@@ -69,7 +69,7 @@ Definition ITrue: Declaration :=
              ; DefaultMethod (MethodHeader 0 BoolTy (Name "eq") [:: BoolTy]) (Var 0)
              ; (DefaultMethod (MethodHeader 1 (MethodTyVar 0) (Name "match")
                                             [:: F0Ty (MethodTyVar 0); F0Ty (MethodTyVar 0) ])
-                              (MethodCall (Var 1) (Name "apply") [::]))
+                              (MethodCall (Var 1) (Name "apply") [::] [::]))
             ].
 
 Definition MainOut: Program :=
