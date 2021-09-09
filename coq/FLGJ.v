@@ -10,6 +10,7 @@ Require Import Names.
 Definition IName: countType := UserIdent_countType.
 Definition MName: countType := UserIdent_countType.
 
+
 (* Standard elimination scheme is not enough cause of nested inductive type seq.
    Will manually recover it later, when \in is available with eqType instance. *)
 Unset Elimination Schemes.
@@ -905,15 +906,11 @@ Definition OverridesCompatible (p: Program): Prop :=
     Subtype p (TyRef (name decl_sub) tyargs1) (TyRef (name decl_super) tyargs2) ->
     (MethodHeader n r1 m s1 \in signatures decl_sub) ->
     (MethodHeader n r2 m s2 \in signatures decl_super) ->
-    Subtype p r2 r1 /\ (map (substitute tyargs1 [::]) s1 = map (substitute tyargs2 [::]) s2).
-
-Definition NoReabstract (p: Program): Prop :=
-  forall m decl_sub decl_super1 decl_super2 e sig,
-    MAbs p m decl_sub decl_super1 sig ->
-    ~(MBody p m decl_super2 decl_super1 e).
+    Subtype p (substitute tyargs1 [::] r2) (substitute tyargs2 [::] r1) /\
+    (map (substitute tyargs1 [::]) s1 = map (substitute tyargs2 [::]) s2).
 
 Definition WF (p: Program) :=
-  NoReabstract p /\ OverridesCompatible p /\ DiamondResolved p /\ domain_unique p /\ method_names_unique_in_types p.
+  OverridesCompatible p /\ DiamondResolved p /\ domain_unique p /\ method_names_unique_in_types p.
 
 Definition MType (p: Program) (m: MName) (from: IName) (classArgs1: seq Ty)
            (defining: IName) (classArgs2: seq Ty) (mdecl: MethodDeclaration): Prop :=
@@ -937,11 +934,15 @@ Inductive CheckExp (p: Program): seq Ty -> Expression -> Ty -> Prop :=
       (forall arg S, (arg, S) \in zip args (mparams mdecl) -> CheckExp p Gamma arg (substitute tyargs2 tyargs S)) ->
       CheckExp p Gamma (MethodCall e m tyargs args) (substitute tyargs2 tyargs (mresult mdecl))
 | CheckExp_Lam:
-    forall Gamma i tyargs1 pi tyargs2 sig e R,
+    forall Gamma i tyargs1 pi tyargs2 sig e,
       UniqueAbsType p (sig_mname sig) i tyargs1 pi tyargs2 sig ->
-      CheckExp p ((map (substitute tyargs2 [::]) (sig_params sig)) ++ Gamma) e R ->
-      Subtype p R (substitute tyargs2 [::] (sig_result sig)) ->
-      CheckExp p Gamma (Lambda (TyRef i tyargs1) (arity sig) e) (TyRef i tyargs1).
+      CheckExp p ((map (substitute tyargs2 [::]) (sig_params sig)) ++ Gamma) e (substitute tyargs2 [::] (sig_result sig)) ->
+      CheckExp p Gamma (Lambda (TyRef i tyargs1) (arity sig) e) (TyRef i tyargs1)
+| CheckExp_Sub:
+    forall Gamma e A B,
+      Subtype p A B ->
+      CheckExp p Gamma e A ->
+      CheckExp p Gamma e B.
 
 
 
