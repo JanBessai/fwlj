@@ -20,7 +20,7 @@ Inductive Ty : Type :=
 
 Inductive Expression : Type :=
 | Var: nat -> Expression
-| MethodCall: Expression -> MName -> seq Expression -> Expression
+| MethodCall: Expression -> MName -> seq Ty -> seq Expression -> Expression
 | Lambda: Ty -> nat -> Expression -> Expression.
 Set Elimination Schemes.
 
@@ -86,16 +86,20 @@ Section MathcompInstances.
   Fixpoint Expression2Tree (e: Expression): GenTree.tree (nat + seq Ty + MName) :=
     match e with
     | Var n => GenTree.Node 0 [:: GenTree.Leaf (inl (inl n))]
-    | MethodCall o m args => GenTree.Node 1 [:: Expression2Tree o, GenTree.Leaf (inr m) & map Expression2Tree args]
+    | MethodCall o m tyargs args =>
+      GenTree.Node 1 [:: Expression2Tree o,
+                      GenTree.Leaf (inr m),
+                      GenTree.Leaf (inl (inr tyargs)) &
+                      map Expression2Tree args]
     | Lambda i n e => GenTree.Node 2 [:: GenTree.Leaf (inl (inr [:: i])); GenTree.Leaf (inl (inl n)); Expression2Tree e]
     end.
 
   Fixpoint Tree2Expression (t: GenTree.tree (nat + seq Ty + MName)): option Expression :=
     match t with
     | GenTree.Node 0 [:: GenTree.Leaf (inl (inl n))] => Some (Var n)
-    | GenTree.Node 1 [:: ot, GenTree.Leaf (inr m) & args] =>
+    | GenTree.Node 1 [:: ot, GenTree.Leaf (inr m), GenTree.Leaf (inl (inr tyargs)) & args] =>
       if Tree2Expression ot is Some o
-      then Some (MethodCall o m (pmap Tree2Expression args))
+      then Some (MethodCall o m tyargs (pmap Tree2Expression args))
       else None
     | GenTree.Node 2 [:: GenTree.Leaf (inl (inr [:: i])); GenTree.Leaf (inl (inl n)); et] =>
       if Tree2Expression et is Some e then Some (Lambda i n e) else None
@@ -110,7 +114,7 @@ Section MathcompInstances.
     case.
     - move => n /=.
         by exact: (refl_equal (Some (Var n))).
-    - move => e m args /=.
+    - move => e m tyargs args /=.
       rewrite (ih e).
       apply: f_equal.
       apply: f_equal.
@@ -319,13 +323,13 @@ Section RecursiveEliminationSchemes.
 
   Fixpoint Expression_rect (P: Expression -> Type)
            (Var_case: forall n, P (Var n))
-           (MethodCall_case: forall e m args, P e -> (forall arg, arg \in args -> P arg) -> P (MethodCall e m args))
+           (MethodCall_case: forall e m tyargs args, P e -> (forall arg, arg \in args -> P arg) -> P (MethodCall e m tyargs args))
            (Lambda_case: forall i n e, P e -> P (Lambda i n e))
            (e: Expression): P e :=
     match e with
     | Var n => Var_case n
-    | MethodCall e m args =>
-      MethodCall_case e m args
+    | MethodCall e m tyargs args =>
+      MethodCall_case e m tyargs args
                       (Expression_rect P Var_case MethodCall_case Lambda_case e)
                       ((fix arg_rec args arg :=
                           match args as args return arg \in args -> P arg with
@@ -343,20 +347,20 @@ Section RecursiveEliminationSchemes.
 
   Definition Expression_ind: forall (P: Expression -> Prop)
            (Var_case: forall n, P (Var n))
-           (MethodCall_case: forall e m args, P e -> (forall arg, arg \in args -> P arg) -> P (MethodCall e m args))
+           (MethodCall_case: forall e m tyargs args, P e -> (forall arg, arg \in args -> P arg) -> P (MethodCall e m tyargs args))
            (Lambda_case: forall i n e, P e -> P (Lambda i n e))
            (e: Expression), P e := Expression_rect.
 
   Definition Expression_rec: forall (P: Expression -> Set)
            (Var_case: forall n, P (Var n))
-           (MethodCall_case: forall e m args, P e -> (forall arg, arg \in args -> P arg) -> P (MethodCall e m args))
+           (MethodCall_case: forall e m tyargs args, P e -> (forall arg, arg \in args -> P arg) -> P (MethodCall e m tyargs args))
            (Lambda_case: forall i n e, P e -> P (Lambda i n e))
            (e: Expression), P e := Expression_rect.
 
   Fixpoint exp_size (e: Expression): nat :=
     match e with
     | Var n => 1
-    | MethodCall e m args => 1 + exp_size e + (sumn (map exp_size args))
+    | MethodCall e m tyargs args => 1 + exp_size e + (sumn (map exp_size args))
     | Lambda i n e => 1 + exp_size e
     end.
 
@@ -446,8 +450,12 @@ Definition mdecls (i: Declaration): seq MethodDeclaration :=
 Definition name (decl: Declaration): IName :=
   match decl with | Interface i _ _ _ => i end.
 
+
 Definition parents (decl: Declaration): seq Ty :=
   match decl with | Interface _ _ pis _ => pis end.
+
+Definition sig_mname (sig: Signature): MName :=
+  match sig with (MethodHeader _ _ m _) => m end.
 
 Definition mname (mdecl: MethodDeclaration): MName :=
   match mdecl with
@@ -455,11 +463,32 @@ Definition mname (mdecl: MethodDeclaration): MName :=
   | DefaultMethod (MethodHeader _ _ m _) _ => m
   end.
 
+Definition sig_params (sig: Signature): seq Ty :=
+  match sig with
+  | MethodHeader _ _ _ s => s
+  end.
+
+Definition sig_result (sig: Signature): Ty :=
+  match sig with
+  | MethodHeader _ r _ _ => r
+  end.
+
+Definition signature (mdecl: MethodDeclaration): Signature :=
+  match mdecl with
+  | AbstractMethod sig => sig
+  | DefaultMethod sig _ => sig
+  end.
+
 Definition signatures (i: Declaration): seq Signature :=
-  map (fun mdecl => match mdecl with
-                 | AbstractMethod sig => sig
-                 | DefaultMethod sig _ => sig
-                 end) (mdecls i).
+  map signature (mdecls i).
+
+Definition mparams (mdecl: MethodDeclaration): seq Ty :=
+  sig_params (signature mdecl).
+
+
+Definition mresult (mdecl: MethodDeclaration): Ty :=
+  sig_result (signature mdecl).
+
 
 Fixpoint substitute (classTyArgs: seq Ty) (methodTyArgs: seq Ty) (ty: Ty): Ty :=
   match ty with
@@ -743,6 +772,15 @@ Section SubtypeProperties.
 
 End SubtypeProperties.
 
+Definition declares (p: Program) (i: IName) (mdecl: MethodDeclaration) :=
+  has (fun decl =>  mdecl \in mdecls decl) (decls p).
+
+Definition declares_name (p: Program) (i: IName) (m: MName) :=
+  has (fun decl =>  m \in map sig_mname (signatures decl)) (decls p).
+
+Definition declares_sig (p: Program) (i: IName) (sig: Signature) :=
+  has (fun decl => sig \in (signatures decl)) (decls p).
+
 Inductive HasDefault (p: Program) (i: IName) (m: MName): Expression -> Prop :=
 | HasDefault_Here: forall ni pis mdecls r nm s e,
     ((Interface i ni pis mdecls) \in decls p) ->
@@ -786,12 +824,70 @@ Proof.
       by rewrite /= eq_refl eq_refl.
 Qed.
 
+Inductive HasAbstract (p: Program) (i: IName) (m: MName): Signature -> Prop :=
+| HasAbstract_Here: forall ni pis mdecls r nm s,
+    ((Interface i ni pis mdecls) \in decls p) ->
+    ((AbstractMethod (MethodHeader r nm m s)) \in mdecls) ->
+    HasAbstract p i m (MethodHeader r nm m s).
+
+Definition has_abstract (p: Program) (i: IName) (m: MName) (sig: Signature): bool :=
+  has (fun decl =>
+         (name decl == i) &&
+         has (fun mdecl => if mdecl is AbstractMethod sig' then (m == sig_mname sig') && (sig == sig') else false)
+             (mdecls decl))
+      (decls p).
+
+Lemma HasAbstractP: forall p i m sig, reflect (HasAbstract p i m sig) (has_abstract p i m sig).
+Proof.
+  move => p i m sig.
+  move: {1 3}(has_abstract p i m sig) (refl_equal (has_abstract p i m sig)).
+  case.
+  - move => absprf.
+    constructor.
+    move: absprf (sym_equal absprf) => _.
+    rewrite /has_abstract.
+    move => /hasP [] [] i' ni pis mdecls iinprf /andP [] /= /eqP i_eq /hasP [] [] //= [] r nm m' s minprf /andP [] /eqP m_eq /eqP sig_eq.
+    rewrite sig_eq m_eq.
+    econstructor.
+    + rewrite -i_eq; by exact iinprf.
+    + by exact minprf.
+  - move => disprf.
+    constructor.
+    move => prf.
+    move: disprf.
+    case: prf.
+    move: sig => _ ni pis mdecls r nm s iinprf minprf.
+    rewrite /has_abstract.
+    move => /(@sym_equal _ _ _) /negbT /negP disprf.
+    apply: disprf.
+    apply: introT; [ by apply: hasP | ].
+    eexists; [ by exact iinprf | ].
+    rewrite eq_refl /=.
+    apply: introT; [ by apply: hasP | ].
+    eexists; [ by exact minprf | ].
+      by rewrite /= eq_refl eq_refl.
+Qed.
+
+Definition MDecl (p: Program) (m: MName) (from: IName) (defining: IName) (mdecl: MethodDeclaration): Prop :=
+  exists (chain: seq IName),
+    InheritanceChain p (chain ++ [:: defining]) /\
+    from = head defining chain /\
+    declares p defining mdecl /\
+    all (fun i => ~~(declares_name p i m)) chain.
+
 Definition MBody (p: Program) (m: MName) (from: IName) (defining: IName) (e: Expression): Prop :=
   exists (chain: seq IName),
     InheritanceChain p (chain ++ [:: defining]) /\
     from = head defining chain /\
-    HasDefault p defining m e /\
-    all (fun i => ~~(has_default p i m e)) chain.
+    has_default p defining m e /\
+    all (fun i => ~~(declares_name p i m)) chain.
+
+Definition MAbs (p: Program) (m: MName) (from: IName) (defining: IName) (sig: Signature): Prop :=
+  exists (chain: seq IName),
+    InheritanceChain p (chain ++ [:: defining]) /\
+    from = head defining chain /\
+    has_abstract p defining m sig /\
+    all (fun i => ~~(declares_name p i m)) chain.
 
 Definition method_names_unique_in_types (p: Program): bool :=
   all (fun decl => uniq (map mname (mdecls decl))) (decls p).
@@ -799,10 +895,10 @@ Definition method_names_unique_in_types (p: Program): bool :=
 Definition domain_unique (p: Program): bool := uniq (domain p).
 
 Definition DiamondResolved (p: Program): Prop :=
-  forall i pi1 pi2 m e1 e2,
-    MBody p m i pi1 e1 ->
-    MBody p m i pi2 e2 ->
-    pi1 = pi2 /\ e1 = e2.
+  forall i pi1 pi2 m mdecl1 mdecl2,
+    MDecl p m i pi1 mdecl1 ->
+    MDecl p m i pi2 mdecl2 ->
+    pi1 = pi2 /\ mdecl1 = mdecl2.
 
 Definition OverridesCompatible (p: Program): Prop :=
   forall decl_sub decl_super tyargs1 tyargs2 m n r1 r2 s1 s2,
@@ -810,6 +906,45 @@ Definition OverridesCompatible (p: Program): Prop :=
     (MethodHeader n r1 m s1 \in signatures decl_sub) ->
     (MethodHeader n r2 m s2 \in signatures decl_super) ->
     Subtype p r2 r1 /\ (map (substitute tyargs1 [::]) s1 = map (substitute tyargs2 [::]) s2).
+
+Definition NoReabstract (p: Program): Prop :=
+  forall m decl_sub decl_super1 decl_super2 e sig,
+    MAbs p m decl_sub decl_super1 sig ->
+    ~(MBody p m decl_super2 decl_super1 e).
+
+Definition WF (p: Program) :=
+  NoReabstract p /\ OverridesCompatible p /\ DiamondResolved p /\ domain_unique p /\ method_names_unique_in_types p.
+
+Definition MType (p: Program) (m: MName) (from: IName) (classArgs1: seq Ty)
+           (defining: IName) (classArgs2: seq Ty) (mdecl: MethodDeclaration): Prop :=
+   MDecl p m from defining mdecl /\
+   Subtype p (TyRef from classArgs1) (TyRef defining classArgs2).
+
+Definition UniqueAbsType (p: Program) (m: MName) (from: IName) (classArgs1: seq Ty)
+           (defining: IName) (classArgs2: seq Ty) (sig: Signature): Prop :=
+  MType p m from classArgs1 defining classArgs2 (AbstractMethod sig) /\
+  (forall m' pi sig', MAbs p m' from pi sig' -> m = m').
+
+Inductive CheckExp (p: Program): seq Ty -> Expression -> Ty -> Prop :=
+| CheckExp_Var:
+    forall Gamma1 A Gamma2 n, n = size Gamma1 -> CheckExp p (Gamma1 ++ [:: A & Gamma2]) (Var n) A
+| CheckExp_Invk: (* TODO: Cut type tyargs1? Also: compute tyargs2 from tyargs1 *)
+    forall Gamma tyargs1 tyargs2 e m tyargs args i pi mdecl,
+      CheckExp p Gamma e (TyRef i tyargs1) ->
+      size args = arity (signature mdecl) ->
+      size tyargs = generic_arity (signature mdecl) ->
+      MType p m i tyargs1 pi tyargs2 mdecl ->
+      (forall arg S, (arg, S) \in zip args (mparams mdecl) -> CheckExp p Gamma arg (substitute tyargs2 tyargs S)) ->
+      CheckExp p Gamma (MethodCall e m tyargs args) (substitute tyargs2 tyargs (mresult mdecl))
+| CheckExp_Lam:
+    forall Gamma i tyargs1 pi tyargs2 sig e R,
+      UniqueAbsType p (sig_mname sig) i tyargs1 pi tyargs2 sig ->
+      CheckExp p ((map (substitute tyargs2 [::]) (sig_params sig)) ++ Gamma) e R ->
+      Subtype p R (substitute tyargs2 [::] (sig_result sig)) ->
+      CheckExp p Gamma (Lambda (TyRef i tyargs1) (arity sig) e) (TyRef i tyargs1).
+
+
+
 
 
 
