@@ -72,4 +72,14 @@ Definition ITrue: Declaration :=
                               (MethodCall (Var 1) (Name "apply") [::]))
             ].
 
-
+Definition MainOut: Program :=
+  Decls
+    [:: Void
+     ; Tuple0
+     ; F0
+     ; F1
+     ; F2
+     ; Bool
+     ; IFalse
+     ; ITrue
+     ].
