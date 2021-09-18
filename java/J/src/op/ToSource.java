@@ -97,14 +97,14 @@ public class ToSource extends AbstractToString{
   public void visitMH(Dec.MH mh){
     visitS(mh.s());
     c("  ");
+    visitT(mh.retType());
+    c(" ");
+    visitX(mh.m());
     if(!mh.gens().isEmpty()){
       c("<");
       list(mh.gens());
       c("> ");
       }
-    visitT(mh.retType());
-    c(" ");
-    visitX(mh.m());
     assert mh.ts().size()==mh.xs().size();
     if(mh.ts().isEmpty()){ return; }
     c("(");

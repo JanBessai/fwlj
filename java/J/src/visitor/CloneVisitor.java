@@ -15,13 +15,12 @@ public interface CloneVisitor {
     }
   default E.MCall visitMCall(E.MCall m){
     var r=visitE(m.receiver());
-    var name=visitX(m.m());
     var gensT=list(m.gensT());
     var es=list(m.es());
-    return new E.MCall(r,name,gensT,es);
+    return new E.MCall(r,m.m(),gensT,es);
     }  
   default T visitT(T t){return t.visitable().accept(this);}
-  default T.CT visitCT(T.CT ct){
+  default T visitCT(T.CT ct){
     var c=visitC(ct.c());
     var tx=list(ct.ts());
     return new T.CT(c, tx);
@@ -51,10 +50,9 @@ public interface CloneVisitor {
     var s=visitS(mh.s());
     var gens=listR(mh.gens());
     var retType=visitT(mh.retType());
-    var m=visitX(mh.m());
     var ts=list(mh.ts());
     var xs=listR(mh.xs());
-    return new Dec.MH(s,gens,retType,m,ts,xs);
+    return new Dec.MH(s,gens,retType,mh.m(),ts,xs);
     }
   default Dec.S visitS(Dec.S s){return s;}
 

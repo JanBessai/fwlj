@@ -9,6 +9,9 @@ public class General {
   public static final RuntimeException todo(){throw new RuntimeException("todo");}
   public static final <T> List<T> popLeft(List<T>t){return t.subList(1,t.size());}
   public static final <T> List<T> popRight(List<T>t){return t.subList(0,t.size()-1);}
+  public static final <T> List<T> concat(List<T> ts1,List<T>ts2){
+    return Stream.concat(ts1.stream(),ts2.stream()).toList();
+    }
   public static final <T> List<T> push(T e,List<T>t){
     return Stream.concat(Stream.of(e),t.stream()).toList();
     }

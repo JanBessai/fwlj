@@ -9,10 +9,10 @@ public sealed interface T extends Visitable.Root<T>{
     public void accept(CollectorVisitor v) {v.visitC(this);}
     public Visitable<C> visitable(){return this;}
     }
-  record CT(C c, List<T>ts) implements T,Visitable.Record<CT,T>{
-    public CT accept(CloneVisitor v){return v.visitCT(this);}
+  record CT(C c, List<T>ts) implements T,Visitable.Record<T,T>{
+    public T accept(CloneVisitor v){return v.visitCT(this);}
     public void accept(CollectorVisitor v) {v.visitCT(this);}
-    public Visitable<CT> visitable(){return this;}
+    public Visitable<T> visitable(){return this;}
     }
   record CX(String s) implements T,Visitable.Record<CX,T>{
     public CX accept(CloneVisitor v){return v.visitCX(this);}

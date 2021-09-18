@@ -1,6 +1,8 @@
 package main;
 
 import java.nio.file.*;
+import java.util.function.*;
+
 import ast.*;
 import op.*;
 
@@ -10,7 +12,9 @@ public class Main {
     //var res=new ToSource().of(p);
     //System.out.println(res);
     var resJ=new ToJava("MainOut").of(p);
-    System.out.println(resJ);
+    //System.out.println(resJ);
+    var resCoq=new ToCoq().of(p);
+    System.out.println(resCoq);    
     }
   
   
@@ -93,8 +97,6 @@ public class Main {
   
   
   
-
-
   static String s="""
       Void:{}
       F0<R>:{ R apply(); }
@@ -128,7 +130,7 @@ public class Main {
       Num:{
         Num pred;
         @Total
-        Num succ = S[this];
+        Num succ = S[this];  //Zero, Succ[Num]
         @Total
         Num add(Num other);
         @Total
@@ -150,6 +152,12 @@ public class Main {
           [this.pred.eq(other.pred)]
           );
         }
+      Fix<A,R>: { F1<A,R> mesh(Fix<A,R> cog); }
+      DoFix:Tuple0 {//Does this works?  DoFix.of([self|[arg|body]]) //sugar? [self|arg|body]
+        F1<A,R> of<A,R>(F1<F1<A,R>,F1<A,R>> fun) =
+          F1<Cog<A,R>,F1<A,R>>[cog|cog.apply(cog)]
+          .apply(cogF->fun.apply(arg->cogF.apply(cogF).apply(arg)));
+        }      
       Union2<A,B>:{
         A toA = this.toA;
         B toB = this.toB;

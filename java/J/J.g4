@@ -33,6 +33,6 @@ dec: C gens ':' t* '{' mDec* '}';
 gens: | '<'C*'>';
 gensT: | '<'t*'>';
 mDec: mH ';'| mH '=' e ';';
-mH: S? gens t x | S? gens t x '(' (t x)* ')';  
+mH: S? t x gens | S? t x gens'(' (t x)* ')';  
 prog: dec* e EOF;
 nudeE: e EOF;

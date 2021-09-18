@@ -7,14 +7,33 @@ import ast.E.*;
 import parser.*;
 import visitor.*;
 
-public class ReplaceFreshXs implements CloneVisitor{
+public class FixParsed implements CloneVisitor{
   private Set<E.X>allXs;
+  private List<T.MX>mxs=List.of();
+  private List<T.CX>cxs=List.of();
   private int counter=0;
   public Program fixProgram(Program p){
     var xs=new Collect.AllX().collect(p);
     allXs=new HashSet<>(xs);
     counter=0;
     return p.accept(this);
+    }
+  public Dec.MH visitMH(Dec.MH mh){
+    this.mxs=mh.gens();
+    return CloneVisitor.super.visitMH(mh);
+    }
+  public Dec visitDec(Dec dec){
+    this.cxs=dec.gens();
+    return CloneVisitor.super.visitDec(dec);
+    }
+  public T visitCT(T.CT t){
+    if(!t.ts().isEmpty()){ return CloneVisitor.super.visitCT(t); }
+    var n=t.c().s();
+    var inCxs=cxs.stream().anyMatch(e->e.s().equals(n));
+    var inMxs=mxs.stream().anyMatch(e->e.s().equals(n));
+    if(inMxs){ return new T.MX(n); }
+    if(inCxs){ return new T.CX(n); }
+    return t;
     }
   E.X freshX(){
     var res=new E.X("u"+(counter++));

@@ -30,7 +30,7 @@ public class JParser {
     var errorsP= errorsPB.toString();
     var hasErr=!errorsT.isEmpty() || !errorsP.isEmpty();
     if (hasErr){ throw new ParserFailed(errorsT+"\n"+errorsP); }
-    return new ReplaceFreshXs().fixProgram(res); 
+    return new FixParsed().fixProgram(res); 
     }
   }  
 class FailConsole extends ConsoleErrorListener{

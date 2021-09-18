@@ -20,13 +20,11 @@ class ParserFailed extends RuntimeException{
   }
 
 public class ParserVisitor implements JVisitor<Object>{
-  List<String> cxs=List.of();
-  List<String> mxs=List.of();
   public static final E.X freshX=new E.X("_toBeReplaced_");
   public StringBuilder errors=new StringBuilder();
   void check(ParserRuleContext ctx){  
     if(ctx.children!=null){return;}
-    throw new ParserFailed();
+    throw new ParserFailed("line ="+ctx.start.getLine()+"\ntext=["+ctx.getText()+"]");
     }
   @Override public Void visit(ParseTree arg0) {throw bug();}
   @Override public Void visitChildren(RuleNode arg0) {throw bug();}
@@ -50,6 +48,7 @@ public class ParserVisitor implements JVisitor<Object>{
     }
   @Override public E.X visitX(XContext ctx) {
     check(ctx);
+    assert !ctx.getText().isBlank();
     return new E.X(ctx.getText());
     }
   @Override public E visitL(LContext ctx) {
@@ -81,8 +80,6 @@ public class ParserVisitor implements JVisitor<Object>{
   @Override public T visitT(TContext ctx) {
     check(ctx);
     String c=ctx.C().getText();
-    if(cxs.contains(c)) {return new T.CX(c);}
-    if(mxs.contains(c)) {return new T.MX(c);}
     List<T> ts=ctx.t().stream().map(t->visitT(t)).toList();
     return new T.CT(new T.C(c),ts);
     }
@@ -97,8 +94,6 @@ public class ParserVisitor implements JVisitor<Object>{
   @Override public Dec.MH visitMH(MHContext ctx) {
     check(ctx);
     List<String> gens=visitGens(ctx.gens());
-    var gensShadow=gens.stream().anyMatch(cxs::contains);
-    if(gensShadow){throw todo();}
     var gg=gens.stream().map(s->new T.MX(s)).toList();
     var s=new Dec.S(ctx.S()==null?"":ctx.S().getText());
     List<T> ts=ctx.t().stream().map(t->visitT(t)).toList();
@@ -107,6 +102,9 @@ public class ParserVisitor implements JVisitor<Object>{
     return new Dec.MH(s,gg, ts.get(0), xs.get(0),popLeft(ts), popLeft(xs));    
     }
   @Override public Dec.M visitMDec(MDecContext ctx) {
+    if(ctx.children==null && ctx.getText().isEmpty()){
+      throw new ParserFailed("line ="+ctx.start.getLine()+"\npossible missing ';' at the end of abstract method");  
+      }
     check(ctx);
     Dec.MH mH=visitMH(ctx.mH());
     Optional<E> e=Optional.empty();

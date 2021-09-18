@@ -8,6 +8,7 @@ public sealed interface E extends Visitable.Root<E>{
     public X accept(CloneVisitor v){return v.visitX(this);}
     public void accept(CollectorVisitor v) {v.visitX(this);}
     public Visitable<X> visitable(){return this;}
+    public static final X thisX=new X("this");
     }
   record L(Optional<T> t,List<X> xs, E e) implements E,Visitable.Record<L,E>{
     public L accept(CloneVisitor v){return v.visitL(this);}
