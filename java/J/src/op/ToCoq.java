@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.stream.*;
 
 import ast.*;
+import ast.Dec.*;
 import visitor.*;
 
 public class ToCoq extends AbstractToString{
@@ -41,8 +42,7 @@ public class ToCoq extends AbstractToString{
     c("])");
     }  
   public void visitDec(Dec dec){
-    //TODO: some names are unfortunate in Coq. Void + IFalse is not enough for me. What is a full solution?
-    c("Definition "+dec.name().s()+":Declaration:=\n");
+    c("Definition "+unclash(dec.name().s())+":Declaration:=\n");
     c("  Interface ");visitC(dec.name());
     c(" "+dec.gens().size()+" [:: ");
     list(dec.supers(),"; ");
@@ -57,8 +57,6 @@ public class ToCoq extends AbstractToString{
     m.e().ifPresent(e->visitE(e));
     }
   public void visitMH(Dec.MH mh){
-    //(MethodHeader 0 TrueTy (Name "checkTrue") [::])
-    //(MethodHeader 0 BoolTy (Name "and") [:: BoolTy])
     c("(MethodHeader "+mh.gens().size()+" ");
     visitT(mh.retType());
     c(" ");
@@ -77,28 +75,57 @@ public class ToCoq extends AbstractToString{
         Require Import Names.
         Require Import String.
         Import StringSyntax.
-         
+        
+        Module Ty.
         """);  
     for(var d:p.decs()){ preVisitDec(d); }
+    c("End Ty.\nModule I.\n");
     p=new DeBruIndexes().visitProgram(p);
     for(var d:p.decs()){ visitDec(d); }
-    //TODO: visitE(p.main());//NO? Yes? How?
+    c("End I.\n"); 
+    //Note: no visit to visitE(p.main());
+    defineProgram(p);
+    defineRecord(p);
     }
+  private void defineProgram(Program p){
+    c("Definition Prog: Program := Decls[::\n  ");
+    String decs=p.decs().stream().map(d->unclash(d.name().s())).collect(Collectors.joining(";\n  "));
+    c(decs+"].\n");
+    }
+  private void defineRecord(Program p){
+    c("Record Theorems := {\n"  );
+    for(var di:p.decs()) {
+      for(var mi: di.ms()) {
+        if(mi.mH().s().s().isEmpty()){continue;}
+        defineRecordEntry(di,mi);
+        }
+      }
+    c("}.");
+    }
+  private void defineRecordEntry(Dec di, M mi){
+    c("  "+unclash(di.name().s())+"_"
+      +unclash(mi.mH().m().s())+" : Terminates (Name \""
+      +di.name().s()+"\") (Name \""
+      +mi.mH().m().s()+"\");\n  ");
+    }
+  private static Map<String,String>clashes=Map.of(
+    "Definition","Definition_"
+    );
+  private static String unclash(String s){return clashes.getOrDefault(s, s);}
   public String cToName(T.C c){
-    //TODO: this conflicts if we have class A and class ATy
-    return c.s()+"Ty";
+    return "Ty."+unclash(c.s());
     }
   public void preVisitDec(Dec d){
-    c("Definition "+cToName(d.name()));
+    c("Definition "+unclash(d.name().s()));
     if(!d.gens().isEmpty()){
       c("(");
-      var pars=d.gens().stream().map(g->g.s()).collect(Collectors.joining(" "));
-      c(pars+":Ty)");
+      var pars=d.gens().stream().map(g->unclash(g.s())).collect(Collectors.joining(" "));
+      c(pars+":TyRef)");
       }
     c(" := TyRef ");
     visitC(d.name());
     c(" [:: ");
-    var pars=d.gens().stream().map(g->g.s()).collect(Collectors.joining("; "));
+    var pars=d.gens().stream().map(g->unclash(g.s())).collect(Collectors.joining("; "));
     c(pars+"].");    
     }
   public void list(List<? extends Visitable.Root<?>>vs,String sep){

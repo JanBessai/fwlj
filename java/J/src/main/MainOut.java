@@ -1,50 +1,27 @@
 package main;
-interface Void{
-}
-interface F0<R>{
-R apply();
-}
-interface F1<A, R>{
-R apply(A a);
-}
-interface F2<A, B, R>{
-R apply(A a, B b);
-}
-interface Tuple0{
-Void dummy(Void x);
-}
+interface Void{}
+interface F0<R>{R apply();}
+interface F1<A, R>{R apply(A a);}
+interface F2<A, B, R>{R apply(A a, B b);}
+interface Tuple0{Void dummy(Void x);}
 interface Bool{
-True checkTrue();
-Bool and(Bool other);
-Bool or(Bool other);
-Bool not();
-Bool eq(Bool other);
-<T> T match(F0<T> onTrue, F0<T> onFalse);
-}
+  True checkTrue();
+  Bool and(Bool other);
+  Bool or(Bool other);
+  Bool not();
+  Bool eq(Bool other);
+  <T> T match(F0<T> onTrue, F0<T> onFalse);
+  }
 interface False extends Bool, Tuple0{
-default   True checkTrue(){
-  return this.checkTrue();
+  default True checkTrue(){ return this.checkTrue(); }
+  default Bool and(Bool other){ return this; }
+  default Bool or(Bool other){ return other; }
+  default Bool not(){ return ((True)(u0)->u0); }
+  default Bool eq(Bool other){ return other.not(); }
+  default <T> T match(F0<T> onTrue, F0<T> onFalse){ return onFalse.apply(); }
   }
-default   Bool and(Bool other){
-  return this;
-  }
-default   Bool or(Bool other){
-  return other;
-  }
-default   Bool not(){
-  return ((True)(u0)->u0);
-  }
-default   Bool eq(Bool other){
-  return other.not();
-  }
-default   <T> T match(F0<T> onTrue, F0<T> onFalse){
-  return onFalse.apply();
-  }
-}
 interface True extends Bool, Tuple0{
-default   True checkTrue(){
-  return this;
-  }
+  default True checkTrue(){ return this; }
 default   Bool and(Bool other){
   return other;
   }

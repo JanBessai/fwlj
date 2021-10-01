@@ -130,7 +130,7 @@ public class Main {
       Num:{
         Num pred;
         @Total
-        Num succ = S[this];  //Zero, Succ[Num]
+        Num succ = S[this]; //Zero, Succ[Num]
         @Total
         Num add(Num other);
         @Total
@@ -152,12 +152,44 @@ public class Main {
           [this.pred.eq(other.pred)]
           );
         }
-      Fix<A,R>: { F1<A,R> mesh(Fix<A,R> cog); }
+      Fix<A,R>:{ F1<A,R> mesh(Fix<A,R> cog); }
       DoFix:Tuple0 {//Does this works?  DoFix.of([self|[arg|body]]) //sugar? [self|arg|body]
         F1<A,R> of<A,R>(F1<F1<A,R>,F1<A,R>> fun) =
           F1<Cog<A,R>,F1<A,R>>[cog|cog.apply(cog)]
           .apply(cogF->fun.apply(arg->cogF.apply(cogF).apply(arg)));
-        }      
+        }//@Total on a method need to generate proofs for all of the heirs
+        
+      A:Tuple0{
+        Person safe(String name,Num age)=(
+          Void u1=CheckString.of(name)
+          Void u2=CheckAge.of(age)
+          Person[of(name,age)]
+          )//refinement types
+
+        Foo make(A a,B b)=(
+          C c=a.foo(b)
+          Foo[x->c.beer(x,a,b)]
+          )
+        Foo make(A a,B b)=
+          F1<C,Foo>[c|Foo[x|c.beer(x,a,b)]]
+          .apply(a.foo(b))
+        -->
+          a.foo(b) ->
+          Foo[x|a.foo(b).beer(x,a,b)]
+
+Terminate N1 N2-->
+explore program, forall types subtype of N1 if the method N2 is implemented, prove
+explore program, forall lambdas subtype of N1, if the implemented method is N2, prove ctx,L
+
+        x:Foo
+        f.m(LL):LL
+          
+        // a:A,b:B,c:C ->Foo[x|c.beer(x,a,b)]
+        // a:A,b:B,c:C & a.foo(b) ->Foo[x->c.beer(x,a,b)]
+        // a:A,b:B,c:C & c=a.foo(b)  & c=b.foo(a) ->Foo[x->c.beer(x,a,b)]
+        // a:A,b:B & a.foo(b) ->Foo[x->a.foo(b).beer(x,a,b)]
+        }
+        
       Union2<A,B>:{
         A toA = this.toA;
         B toB = this.toB;
@@ -204,6 +236,18 @@ public class Main {
         //Num tmp2=tmp1.add(tmp1)
         //tmp2.add(tmp1)
         }
+      GNode:{
+        List<GNode> edges;
+        Num label;
+        }
+      //ENode:GNode{ List<GNode> edges = List<GNode> }
+      NNode:GNode,Tuple2<List<GNode>,Num>{
+        List<GNode> edges = this._1;
+        Num label = this._2;
+        }
+      SelfNode:GNode{ List<GNode> edges = NNode[of(List<GNode>.push(this),num24)] }
+      //  SelfNode[myNum]
+      //NNode[of(myList,myNum)]
       nope
       """;
   }

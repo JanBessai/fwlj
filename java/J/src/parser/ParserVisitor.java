@@ -99,7 +99,7 @@ public class ParserVisitor implements JVisitor<Object>{
     List<T> ts=ctx.t().stream().map(t->visitT(t)).toList();
     List<E.X> xs=ctx.x().stream().map(x->visitX(x)).toList();
     assert ts.size()==xs.size();
-    return new Dec.MH(s,gg, ts.get(0), xs.get(0),popLeft(ts), popLeft(xs));    
+    return new Dec.MH(s,gg, ts.get(ts.size()-1), xs.get(0),popRight(ts), popLeft(xs));    
     }
   @Override public Dec.M visitMDec(MDecContext ctx) {
     if(ctx.children==null && ctx.getText().isEmpty()){

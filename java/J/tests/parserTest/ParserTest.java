@@ -48,16 +48,22 @@ class ParserTest {
     ""","""
     interface A{}
     ""","""
-    Definition ATy := TyRef (Name "A") [:: ].
+    Module Ty.
+    Definition A := TyRef (Name "A") [:: ].
+    End Ty.
+    Module I.
     Definition A :Declaration:=
     Interface (Name "A") 0 [:: ] [::
       ].
+    End I.
+    Definition Prog:Program:=Decls[::A].
+    RecordTheorems:={}.
     """
     );}
   @Test void test2(){ok("""
-    I<AA>:{I<AA> foo<F>(I<F> f);}
+    I<AA>:{foo<F>(f : I<F>):I<AA>;}
     A<X1,X2>:I<X1>{
-      I<X2> m<X3>(I<X3> i3, I<X1> i1) =
+      m<X3>(i3:I<X3>, i1:I<X1>):I<X2> =
         this.foo<A<X1,X2>>(I<I<X2>>);
       }
     ""","""
@@ -105,63 +111,73 @@ class ParserTest {
         }
       }
     ""","""
-    Definition ITy(AA:Ty):= TyRef(Name"I")[::AA].
-    Definition ATy(X1 X2:Ty):= TyRef(Name"A")[::X1; X2].
+    Module Ty.
+    Definition I(AA:TyRef):= TyRef(Name"I")[::AA].
+    Definition A(X1 X2:TyRef):= TyRef(Name"A")[::X1; X2].
+    End Ty.
+    Module I.
     Definition I :Declaration:=Interface(Name"I")1[::][::
       AbstractMethod(
-        MethodHeader 1 (ITy(ClassTyVar 0)) (Name "foo") [:: (ITy(MethodTyVar0)) ]
+        MethodHeader 1 (Ty.I(ClassTyVar 0)) (Name "foo") [:: (Ty.I(MethodTyVar0)) ]
         )
       ].
     Definition A :Declaration:=Interface(Name"A")2
-      [::(ITy (ClassTyVar 0))]
+      [::(Ty.I (ClassTyVar 0))]
       [::
       DefaultMethod
-        (MethodHeader 1(ITy(ClassTyVar 1))(Name "m") [::(ITy(MethodTyVar 0));(ITy(ClassTyVar 0))])
+        (MethodHeader 1(Ty.I(ClassTyVar 1))(Name "m") [::(Ty.I(MethodTyVar 0));(Ty.I(ClassTyVar 0))])
           (MethodCall(Var 0)(Name "foo")
-            [::(ATy(ClassTyVar 0)(ClassTyVar 1))]
-            [::(Lambda (ITy(ITy(ClassTyVar 1))) 1 (Var 0) )])
+            [::(Ty.A(ClassTyVar 0)(ClassTyVar 1))]
+            [::(Lambda (Ty.I(Ty.I(ClassTyVar 1))) 1 (Var 0) )])
       ].
+    End I.
+    DefinitionProg:Program:=Decls[::I;A].
+    RecordTheorems:={}.
     """);}
   @Test void test3(){ok("""  
     Void:{}
-    F0<R>:{ R apply(); }
-    F1<A,R>:{ R apply(A a); }
-    F2<A,B,R>:{ R apply(A a,B b); }
-    Tuple0:{Void dummy(Void x);}      
+    F0<R>:{ apply():R; }
+    F1<A,R>:{ apply(a:A):R; }
+    F2<A,B,R>:{ apply(a:A,b:B):R ; }
+    Tuple0:{dummy(x:Void):Void;}      
     Bool:{
-      True checkTrue;
-      Bool and(Bool other);
-      Bool or(Bool other);
-      Bool not;
-      Bool eq(Bool other);
-      T match<T>(F0<T> onTrue, F0<T> onFalse);
+      checkTrue:True;
+      @Total
+      and(other:Bool):Bool;
+      @Total
+      or(other:Bool):Bool;
+      not:Bool;
+      eq(other:Bool):Bool;
+      match<T>(onTrue:F0<T>, onFalse:F0<T>):T;
       }
     False:Bool,Tuple0{
-      True checkTrue = this.checkTrue;
-      Bool and(Bool other) = this;
-      Bool or(Bool other) = other;
-      Bool not = True;
-      Bool eq(Bool other) = other.not;
-      T match<T>(F0<T> onTrue,F0<T> onFalse) = onFalse.apply;
+      checkTrue:True = this.checkTrue;
+      and(other:Bool):Bool = this;
+      or(other:Bool):Bool = other;
+      not:Bool = True;
+      eq(other:Bool):Bool = other.not;
+      match<T>(onTrue:F0<T>, onFalse:F0<T>):T = onFalse.apply;
       }
     True:Bool,Tuple0{
-      True checkTrue = this;
-      Bool and(Bool other) = other;
-      Bool or(Bool other) = this;
-      Bool not = False;
-      Bool eq(Bool other) = other;
-      T match<T>(F0<T> onTrue,F0<T> onFalse) = onTrue.apply;
+      checkTrue:True = this;
+      and(other:Bool):Bool = other;
+      or(other:Bool):Bool = this;
+      not:Bool = False;
+      eq(other:Bool):Bool = other;
+      match<T>(onTrue:F0<T>, onFalse:F0<T>):T = onTrue.apply;
       }
     """,null,null,null,"""
-    Definition VoidTy := TyRef (Name "Void") [::].
-    Definition F0Ty (R: Ty) := TyRef (Name "F0") [:: R ].
-    Definition F1Ty (A R: Ty) := TyRef (Name "F1") [:: A; R ].    
-    Definition F2Ty (A B R: Ty) := TyRef (Name "F2") [:: A; B; R ].
-    Definition Tuple0Ty := TyRef (Name "Tuple0") [::].
-    Definition BoolTy := TyRef (Name "Bool") [::].
-    Definition FalseTy := TyRef (Name "False") [::].
-    Definition TrueTy := TyRef (Name "True") [::].
-
+    Module Ty.
+    Definition Void := TyRef (Name "Void") [::].
+    Definition F0 (R: TyRef) := TyRef (Name "F0") [:: R ].
+    Definition F1 (A R: TyRef) := TyRef (Name "F1") [:: A; R ].    
+    Definition F2 (A B R: TyRef) := TyRef (Name "F2") [:: A; B; R ].
+    Definition Tuple0 := TyRef (Name "Tuple0") [::].
+    Definition Bool := TyRef (Name "Bool") [::].
+    Definition False := TyRef (Name "False") [::].
+    Definition True := TyRef (Name "True") [::].
+    End Ty.
+    Module I.
     Definition Void: Declaration :=
       Interface (Name "Void") 0 [::] [::].   
     Definition F0: Declaration :=
@@ -177,43 +193,48 @@ class ParserTest {
         )].
     Definition Tuple0: Declaration :=
     Interface (Name "Tuple0") 0 [::]
-      [:: AbstractMethod (MethodHeader 0 VoidTy (Name "dummy") [:: VoidTy ]) ].
+      [:: AbstractMethod (MethodHeader 0 Ty.Void (Name "dummy") [:: Ty.Void ]) ].
     Definition Bool: Declaration :=
       Interface (Name "Bool") 0 [::]
-            [:: AbstractMethod (MethodHeader 0 TrueTy (Name "checkTrue") [::])
-             ; AbstractMethod (MethodHeader 0 BoolTy (Name "and") [:: BoolTy])
-             ; AbstractMethod (MethodHeader 0 BoolTy (Name "or") [:: BoolTy])
-             ; AbstractMethod (MethodHeader 0 BoolTy (Name "not") [::])
-             ; AbstractMethod (MethodHeader 0 BoolTy (Name "eq") [:: BoolTy])
+            [:: AbstractMethod (MethodHeader 0 Ty.True (Name "checkTrue") [::])
+             ; AbstractMethod (MethodHeader 0 Ty.Bool (Name "and") [:: Ty.Bool])
+             ; AbstractMethod (MethodHeader 0 Ty.Bool (Name "or") [:: Ty.Bool])
+             ; AbstractMethod (MethodHeader 0 Ty.Bool (Name "not") [::])
+             ; AbstractMethod (MethodHeader 0 Ty.Bool (Name "eq") [:: Ty.Bool])
              ; AbstractMethod (MethodHeader 1 (MethodTyVar 0) (Name "match")
-               [:: (F0Ty (MethodTyVar 0)); (F0Ty (MethodTyVar 0)) ])
+               [:: (Ty.F0 (MethodTyVar 0)); (Ty.F0 (MethodTyVar 0)) ])
             ].
     Definition False: Declaration :=
-      Interface (Name "False") 0 [:: BoolTy; Tuple0Ty ]
-      [:: DefaultMethod (MethodHeader 0 TrueTy (Name "checkTrue") [::])
+      Interface (Name "False") 0 [:: Ty.Bool; Ty.Tuple0 ]
+      [:: DefaultMethod (MethodHeader 0 Ty.True (Name "checkTrue") [::])
         (MethodCall (Var 0) (Name "checkTrue") [::] [::])
-        ; DefaultMethod (MethodHeader 0 BoolTy (Name "and") [:: BoolTy]) (Var 0)
-        ; DefaultMethod (MethodHeader 0 BoolTy (Name "or") [:: BoolTy]) (Var 1)
-        ; DefaultMethod (MethodHeader 0 BoolTy (Name "not") [::])
-          (Lambda TrueTy 1 (Var 0))
-        ; DefaultMethod (MethodHeader 0 BoolTy (Name "eq") [:: BoolTy])
+        ; DefaultMethod (MethodHeader 0 Ty.Bool (Name "and") [:: Ty.Bool]) (Var 0)
+        ; DefaultMethod (MethodHeader 0 Ty.Bool (Name "or") [:: Ty.Bool]) (Var 1)
+        ; DefaultMethod (MethodHeader 0 Ty.Bool (Name "not") [::])
+          (Lambda Ty.True 1 (Var 0))
+        ; DefaultMethod (MethodHeader 0 Ty.Bool (Name "eq") [:: Ty.Bool])
           (MethodCall (Var 1) (Name "not") [::] [::])
         ; DefaultMethod (MethodHeader 1 (MethodTyVar 0) (Name "match")
-          [:: (F0Ty (MethodTyVar 0)); (F0Ty (MethodTyVar 0)) ])
+          [:: (Ty.F0 (MethodTyVar 0)); (Ty.F0 (MethodTyVar 0)) ])
           (MethodCall (Var 2) (Name "apply") [::] [::])
         ].
     Definition True: Declaration :=
-      Interface (Name "True") 0 [:: BoolTy; Tuple0Ty ]
-      [:: DefaultMethod (MethodHeader 0 TrueTy (Name "checkTrue") [::]) (Var 0)
-        ; DefaultMethod (MethodHeader 0 BoolTy (Name "and") [:: BoolTy]) (Var 1)
-        ; DefaultMethod (MethodHeader 0 BoolTy (Name "or") [:: BoolTy]) (Var 0)
-        ; DefaultMethod (MethodHeader 0 BoolTy (Name "not") [::])
-            (Lambda FalseTy 1 (Var 0))
-        ; DefaultMethod (MethodHeader 0 BoolTy (Name "eq") [:: BoolTy]) (Var 1)
+      Interface (Name "True") 0 [:: Ty.Bool; Ty.Tuple0 ]
+      [:: DefaultMethod (MethodHeader 0 Ty.True (Name "checkTrue") [::]) (Var 0)
+        ; DefaultMethod (MethodHeader 0 Ty.Bool (Name "and") [:: Ty.Bool]) (Var 1)
+        ; DefaultMethod (MethodHeader 0 Ty.Bool (Name "or") [:: Ty.Bool]) (Var 0)
+        ; DefaultMethod (MethodHeader 0 Ty.Bool (Name "not") [::])
+            (Lambda Ty.False 1 (Var 0))
+        ; DefaultMethod (MethodHeader 0 Ty.Bool (Name "eq") [:: Ty.Bool]) (Var 1)
         ; DefaultMethod (MethodHeader 1 (MethodTyVar 0) (Name "match")
-            [:: (F0Ty (MethodTyVar 0)); (F0Ty (MethodTyVar 0)) ])
+            [:: (Ty.F0 (MethodTyVar 0)); (Ty.F0 (MethodTyVar 0)) ])
             (MethodCall (Var 1) (Name "apply") [::] [::])
             ].
+    End I.
+    DefinitionProg:Program:=Decls[::
+      Void; F0; F1; F2; Tuple0; Bool; False; True
+      ].
+    RecordTheorems:={Bool_and:Terminates(Name"Bool")(Name"and");Bool_or:Terminates(Name"Bool")(Name"or");}.
     """);
     }
     
