@@ -7,29 +7,29 @@ import op.*;
 import visitor.*;
 
 public sealed interface E extends Visitable.Root<E>{
-  final class X implements E,Visitable.Record<X,E> {
+  final class X implements E,Visitable.Record<E,E> {
     private final String s;
     public final String s(){ return s; }
     private X(String s){this.s=s;}
     private final static Cache<String,X> cache=new Cache<>(X::new);
     public static X of(String s){ return cache.of(s); }
-    public X accept(CloneVisitor v){return v.visitX(this);}
+    public E accept(CloneVisitor v){return v.visitX(this);}
     public void accept(CollectorVisitor v) {v.visitX(this);}
-    public Visitable<X> visitable(){return this;}
+    public Visitable<E> visitable(){return this;}
     public String toString() { return new ToSource().of(this); }
     public static final X thisX=X.of("this");
   }
   final class L implements E,Visitable.Record<L,E>{
-    private final Optional<T> t;
+    private final Optional<T.CT> t;
     private final List<X> xs;
     private final E e;
-    public final Optional<T> t(){ return t; }
+    public final Optional<T.CT> t(){ return t; }
     public final List<X> xs(){ return xs; }
     public final E e(){ return e; }
-    private record Inner(Optional<T> t, List<X> xs, E e){}
+    private record Inner(Optional<T.CT> t, List<X> xs, E e){}
     private L(Inner i){t=i.t;xs=i.xs;e=i.e;}    
     private final static Cache<Inner,L> cache=new Cache<>(L::new);
-    public static L of(Optional<T> t, List<X> xs, E e){ return cache.of(new Inner(t,xs,e)); }
+    public static L of(Optional<T.CT> t, List<X> xs, E e){ return cache.of(new Inner(t,xs,e)); }
     public L accept(CloneVisitor v){return v.visitL(this);}
     public void accept(CollectorVisitor v) {v.visitL(this);}
     public Visitable<L> visitable(){return this;}

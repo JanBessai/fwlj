@@ -11,20 +11,27 @@ import visitor.*;
 public final class Dec implements Visitable.Record<Dec,Dec>{
   private final T.C name;
   private final List<T.CX>gens;
-  private final List<T>supers;
+  private final List<T.CT>supers;
   private final List<M>ms;
   public final T.C name(){ return name; }
   public final List<T.CX>gens(){ return gens; }
-  public List<T>supers(){ return supers; }
+  public List<T.CT>supers(){ return supers; }
   public final List<M>ms(){ return ms; }
-  private record Inner(T.C name,List<T.CX>gens,List<T>supers,List<M>ms){}
-  private Dec(Inner i){ name=i.name;gens=i.gens;supers=i.supers;ms=i.ms; }    
+  private record Inner(T.C name,List<T.CX>gens,List<T.CT>supers,List<M>ms){}
+  private Dec(Inner i){
+    name=i.name;gens=i.gens;supers=i.supers;ms=i.ms; 
+    var mmap=new HashMap<E.X,M>();
+    for(M m:ms){ mmap.put(m.mH.m(), m); }
+    map=Collections.unmodifiableMap(mmap);
+    }    
   private final static Cache<Inner,Dec> cache=new Cache<>(Dec::new);
-  public static Dec of(T.C name,List<T.CX>gens,List<T>supers,List<M>ms){ return cache.of(new Inner(name,gens,supers,ms)); }    
+  public static Dec of(T.C name,List<T.CX>gens,List<T.CT>supers,List<M>ms){ return cache.of(new Inner(name,gens,supers,ms)); }    
   public Dec accept(CloneVisitor v){return v.visitDec(this);}
   public void accept(CollectorVisitor v) {v.visitDec(this);}
   public Visitable<Dec> visitable(){return this;}
   public String toString() { return new ToSource().of(this); }
+  private final Map<E.X,M> map;
+  public M get(E.X x){ return map.get(x); }
   
   public static final class M implements Visitable.Record<M,M>{
     private final MH mH;

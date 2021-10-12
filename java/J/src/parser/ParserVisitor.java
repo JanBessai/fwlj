@@ -52,8 +52,8 @@ public class ParserVisitor implements JVisitor<Object>{
     }
   @Override public E visitL(LContext ctx) {
     check(ctx);
-    Optional<T>t=Optional.empty();
-    if(ctx.t()!=null){t=Optional.of(visitT(ctx.t()));}
+    Optional<T.CT>t=Optional.empty();
+    if(ctx.t()!=null){t=Optional.of((T.CT)visitT(ctx.t()));}
     // Note, [foo] means [foo] the local var, not [x|x.foo()]
     // to disambiguate, parenthesis are kept in that sugar
     List<E.X> xs=ctx.e()==null?
@@ -151,7 +151,7 @@ public class ParserVisitor implements JVisitor<Object>{
     var name=T.C.of(ctx.C().getText());
     List<String> gens=visitGens(ctx.gens());
     var gg=gens.stream().map(s->T.CX.of(s)).toList();
-    List<T> ts=ctx.t().stream().map(t->visitT(t)).toList();
+    List<T.CT> ts=ctx.t().stream().map(t->(T.CT)visitT(t)).toList();
     List<Dec.M>ms=ctx.mDec().stream().map(m->visitMDec(m)).toList();
     return Dec.of(name,gg,ts,ms);
     }
