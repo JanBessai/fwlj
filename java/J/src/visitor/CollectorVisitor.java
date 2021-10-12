@@ -1,5 +1,6 @@
 package visitor;
-import java.util.List;
+import java.util.*;
+
 import ast.*;
 
 public interface CollectorVisitor {
@@ -33,21 +34,34 @@ public interface CollectorVisitor {
     }
   default void visitProgram(Program p){
     list(p.decs());
-    visitE(p.main());
     }
   default void visitM(Dec.M m){
     visitMH(m.mH());
     m.e().ifPresent(this::visitE);
     }
   default void visitMH(Dec.MH mh){
-    visitS(mh.s());
+    mh.s().ifPresent(this::visitS);
     list(mh.gens());
     visitT(mh.retType());
     visitX(mh.m());
     list(mh.ts());
     list(mh.xs());
     }
-  default void visitS(Dec.S s){}
+  default void visitS(Dec.S s){
+    s.inductive().ifPresent(this::visitInductive);
+    list(s.hs());
+    }
+  default void visitInductive(Dec.Inductive i){
+    visitX(i.x());
+    visitE(i.e());
+    }
+  default void visitH(Dec.H h){
+    list(h.xs());
+    for(var ei: h.g().entrySet()) {
+      visitX(ei.getKey());
+      visitT(ei.getValue());
+      }
+    }
   default void list(List<? extends Visitable.Root<?>>vs){
     for(var v:vs) {v.visitable().accept(this);}
     }

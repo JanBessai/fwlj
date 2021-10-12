@@ -18,6 +18,27 @@ public class FixParsed implements CloneVisitor{
     counter=0;
     return p.accept(this);
     }
+  public Dec.M visitM(Dec.M m){
+    if(m.mH().s().isEmpty()){ return CloneVisitor.super.visitM(m); }
+    var i=m.mH().s().get().inductive();
+    var toFix=i.isPresent() && i.get().e()==null;
+    if (toFix && m.e().isEmpty()){
+      throw new ParserVisitor.ParserFailed("abstract methods must specify induction expression explicitly");
+      }
+    if(toFix){
+      i=Optional.of(Dec.Inductive.of(i.get().x(),m.e().get()));
+      var s=m.mH().s().get().with(i);      
+      var mh=m.mH().with(Optional.of(s));
+      m=m.with(mh);
+      }
+    return CloneVisitor.super.visitM(m);
+    }
+  public Dec.H visitH(Dec.H h){
+    var old=this.mxs;
+    this.mxs=h.xs();
+    try{return CloneVisitor.super.visitH(h);}
+    finally{this.mxs=old;}
+    }
   public Dec.MH visitMH(Dec.MH mh){
     this.mxs=mh.gens();
     return CloneVisitor.super.visitMH(mh);
@@ -31,12 +52,12 @@ public class FixParsed implements CloneVisitor{
     var n=t.c().s();
     var inCxs=cxs.stream().anyMatch(e->e.s().equals(n));
     var inMxs=mxs.stream().anyMatch(e->e.s().equals(n));
-    if(inMxs){ return new T.MX(n); }
-    if(inCxs){ return new T.CX(n); }
+    if(inMxs){ return T.MX.of(n); }
+    if(inCxs){ return T.CX.of(n); }
     return t;
     }
   E.X freshX(){
-    var res=new E.X("u"+(counter++));
+    var res=E.X.of("u"+(counter++));
     var notContained=allXs.add(res);
     if(notContained){ return res; }
     return freshX();
@@ -45,7 +66,7 @@ public class FixParsed implements CloneVisitor{
     l=CloneVisitor.super.visitL(l);
     if(l.e()==ParserVisitor.freshX){
       var x=freshX();
-      return new E.L(l.t(),List.of(x),x);
+      return E.L.of(l.t(),List.of(x),x);
       }
     if(!(l.e() instanceof E.MCall mc)){ return l; }
     var skip = l.xs().size()!=1 
@@ -53,7 +74,7 @@ public class FixParsed implements CloneVisitor{
       || mc.receiver()!=ParserVisitor.freshX;
     if(skip){return l;}
     var x=freshX();
-    mc=new MCall(x,mc.m(),mc.gensT(),mc.es());
-    return new E.L(l.t(),List.of(x),mc);
+    mc=MCall.of(x,mc.m(),mc.gensT(),mc.es());
+    return E.L.of(l.t(),List.of(x),mc);
     }
   }

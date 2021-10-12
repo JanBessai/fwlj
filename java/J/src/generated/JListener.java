@@ -8,6 +8,56 @@ import org.antlr.v4.runtime.tree.ParseTreeListener;
  */
 public interface JListener extends ParseTreeListener {
 	/**
+	 * Enter a parse tree produced by {@link JParser#s}.
+	 * @param ctx the parse tree
+	 */
+	void enterS(JParser.SContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link JParser#s}.
+	 * @param ctx the parse tree
+	 */
+	void exitS(JParser.SContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link JParser#induction}.
+	 * @param ctx the parse tree
+	 */
+	void enterInduction(JParser.InductionContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link JParser#induction}.
+	 * @param ctx the parse tree
+	 */
+	void exitInduction(JParser.InductionContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link JParser#h}.
+	 * @param ctx the parse tree
+	 */
+	void enterH(JParser.HContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link JParser#h}.
+	 * @param ctx the parse tree
+	 */
+	void exitH(JParser.HContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link JParser#cs}.
+	 * @param ctx the parse tree
+	 */
+	void enterCs(JParser.CsContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link JParser#cs}.
+	 * @param ctx the parse tree
+	 */
+	void exitCs(JParser.CsContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link JParser#g}.
+	 * @param ctx the parse tree
+	 */
+	void enterG(JParser.GContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link JParser#g}.
+	 * @param ctx the parse tree
+	 */
+	void exitG(JParser.GContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link JParser#x}.
 	 * @param ctx the parse tree
 	 */

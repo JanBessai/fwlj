@@ -14,21 +14,19 @@ class ParserTest {
  public static String trim(String s){
    return s.replace(" ","").replace("\n","");
    }
- public static void ok(String in,String toString, String toSource,String toJava, String toCoq){
+ public static void ok(String in, String toSource,String toJava, String toCoq){
    Program p=new parser.JParser().program(
      Path.of("Dummy.txt"),
-     in+"\n Foo[x|x]"
+     in
      );
-   String actualToString=p.toString();
+   //String actualToString=p.toString();
    String actualToSource=new ToSource().of(p);
-   String actualToJava=new ToJava("MainOut").of(p);
+   String actualToJava=new ToJava().of(p);
    String actualToCoq=new ToCoq().of(p);
-   if(toString!=null){ assertEquals("Program[decs=["+trim(toString)+"]",
-     trim(actualToString)); }
-   if(toSource!=null){ assertEquals(trim(toSource)+"Foo",trim(actualToSource)); }
-   if(toJava!=null){ assertEquals(trim(toJava)+
-   "publicclassMainOut{publicstaticvoidmain(String[]a){((Foo)(x)->x);}}"
-   ,trim(actualToJava)); }
+   //if(toString!=null){ assertEquals("Program[decs=["+trim(toString)+"]",
+   //  trim(actualToString)); }
+   if(toSource!=null){ assertEquals(trim(toSource),trim(actualToSource)); }
+   if(toJava!=null){ assertEquals(trim(toJava),trim(actualToJava)); }
    if(toCoq!=null){ assertEquals(trim("""
      From mathcomp Require Import all_ssreflect.
      Require Import FLGJ.
@@ -41,8 +39,6 @@ class ParserTest {
    }
   @Test void test1(){ok("""
     A:{}
-    ""","""
-    Dec[name=C[s=A], gens=[], supers=[], ms=[]]], main=L[t=Optional[CT[c=C[s=Foo], ts=[]]], xs=[X[s=x]], e=X[s=x]]
     ""","""
     A:{}
     ""","""
@@ -61,38 +57,11 @@ class ParserTest {
     """
     );}
   @Test void test2(){ok("""
-    I<AA>:{foo<F>(f : I<F>):I<AA>;}
+    I<AA>:{ foo<F>(f:I<F>):I<AA>; }
     A<X1,X2>:I<X1>{
       m<X3>(i3:I<X3>, i1:I<X1>):I<X2> =
         this.foo<A<X1,X2>>(I<I<X2>>);
       }
-    ""","""
-    Dec[name=C[s=I],gens=[CX[s=AA]],supers=[],ms=[
-      M[mH=MH[
-        s=S[s=],
-        gens=[MX[s=F]],
-        retType=CT[c=C[s=I],ts=[CX[s=AA]]],
-        m=X[s=foo],
-        ts=[ CT[ c=C[s=I],ts=[MX[s=F]] ] ],
-        xs=[X[s=f]]],
-        e=Optional.empty
-        ]]],
-      Dec[name=C[s=A],gens=[CX[s=X1],CX[s=X2]],supers=[
-        CT[c=C[s=I],ts=[CX[s=X1]]]
-        ],ms=[
-        M[mH=
-          MH[s=S[s=],gens=[MX[s=X3]],retType=CT[c=C[s=I],ts=[CX[s=X2]]],
-          m=X[s=m],
-          ts=[CT[c=C[s=I],ts=[MX[s=X3]]],CT[c=C[s=I],ts=[CX[s=X1]]]],
-          xs=[X[s=i3],X[s=i1]]],
-          e=Optional[MCall[
-            receiver=X[s=this],
-            m=X[s=foo],
-            gensT=[CT[c=C[s=A],ts=[CX[s=X1],CX[s=X2]]]],
-            es=[L[t=Optional[CT[c=C[s=I],ts=[CT[c=C[s=I],ts=[CX[s=X2]]]]]],xs=[X[s=u0]],e=X[s=u0]]]]]
-          ]
-        ]]],
-    main=L[t=Optional[CT[c=C[s=Foo],ts=[]]],xs=[X[s=x]],e=X[s=x]]
     ""","""
     I<AA>:{
       I<AA>foo<F>(I<F>f);
@@ -142,9 +111,9 @@ class ParserTest {
     Tuple0:{dummy(x:Void):Void;}      
     Bool:{
       checkTrue:True;
-      @Total
+      @total
       and(other:Bool):Bool;
-      @Total
+      @total
       or(other:Bool):Bool;
       not:Bool;
       eq(other:Bool):Bool;
@@ -166,7 +135,7 @@ class ParserTest {
       eq(other:Bool):Bool = other;
       match<T>(onTrue:F0<T>, onFalse:F0<T>):T = onTrue.apply;
       }
-    """,null,null,null,"""
+    """,null,null,"""
     Module Ty.
     Definition Void := TyRef (Name "Void") [::].
     Definition F0 (R: TyRef) := TyRef (Name "F0") [:: R ].

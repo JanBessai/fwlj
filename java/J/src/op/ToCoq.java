@@ -96,7 +96,7 @@ public class ToCoq extends AbstractToString{
     c("Record Theorems := {\n"  );
     for(var di:p.decs()) {
       for(var mi: di.ms()) {
-        if(mi.mH().s().s().isEmpty()){continue;}
+        if(mi.mH().s().isEmpty()){continue;}
         defineRecordEntry(di,mi);
         }
       }

@@ -26,17 +26,17 @@ public class DeBruIndexes implements CloneVisitor{
     var i=vars.indexOf(x);
     assert i!=-1:
       "";
-    return new E.X(""+i);
+    return E.X.of(""+i);
     }
   public T.CX visitCX(T.CX cx){
     var i=dec.gens().indexOf(cx);
     assert i!=-1;
-    return new T.CX(""+i);
+    return T.CX.of(""+i);
     }
   public T.MX visitMX(T.MX mx){
     var i=mh.gens().indexOf(mx);
     assert i!=-1;
-    return new T.MX(""+i);
+    return T.MX.of(""+i);
     }
   public E.L visitL(E.L l){
     var oldV=vars;

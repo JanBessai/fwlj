@@ -13,14 +13,13 @@ import ast.*;
 import generated.JParser.*;
 import generated.JVisitor;
 
-@SuppressWarnings("serial")
-class ParserFailed extends RuntimeException{
-  public ParserFailed(){}
-  public ParserFailed(String msg){super(msg);}
-  }
-
 public class ParserVisitor implements JVisitor<Object>{
-  public static final E.X freshX=new E.X("_toBeReplaced_");
+  @SuppressWarnings("serial")
+  public static class ParserFailed extends RuntimeException{
+    public ParserFailed(){}
+    public ParserFailed(String msg){super(msg);}
+    }
+  public static final E.X freshX=E.X.of("_toBeReplaced_");
   public StringBuilder errors=new StringBuilder();
   void check(ParserRuleContext ctx){  
     if(ctx.children!=null){return;}
@@ -49,7 +48,7 @@ public class ParserVisitor implements JVisitor<Object>{
   @Override public E.X visitX(XContext ctx) {
     check(ctx);
     assert !ctx.getText().isBlank();
-    return new E.X(ctx.getText());
+    return E.X.of(ctx.getText());
     }
   @Override public E visitL(LContext ctx) {
     check(ctx);
@@ -62,7 +61,7 @@ public class ParserVisitor implements JVisitor<Object>{
     E e=ctx.e()==null?
       freshX:visitE(ctx.e());
     for(var mCall : ctx.mCall()) {e=visitMCall(e,mCall);}
-    return new E.L(t,xs,e);
+    return E.L.of(t,xs,e);
     }
   @Override public E visitNum(NumContext ctx) {throw todo();}
   @Override public E visitString(StringContext ctx) {throw todo();}
@@ -71,7 +70,7 @@ public class ParserVisitor implements JVisitor<Object>{
     E.X m=visitX(ctx.x());
     List<E> es=ctx.e().stream().map(e->visitE(e)).toList();
     List<T> gensT=visitGensT(ctx.gensT());
-    return new E.MCall(rec, m, gensT, es);
+    return E.MCall.of(rec, m, gensT, es);
     }
   @Override public E visitNudeE(NudeEContext ctx) {
     check(ctx);
@@ -81,7 +80,7 @@ public class ParserVisitor implements JVisitor<Object>{
     check(ctx);
     String c=ctx.C().getText();
     List<T> ts=ctx.t().stream().map(t->visitT(t)).toList();
-    return new T.CT(new T.C(c),ts);
+    return T.CT.of(T.C.of(c),ts);
     }
   @Override public List<String> visitGens(GensContext ctx) {
     if(ctx.children==null){return List.of();}
@@ -91,15 +90,51 @@ public class ParserVisitor implements JVisitor<Object>{
     if(ctx.children==null){return List.of();}
     return ctx.t().stream().map(t->visitT(t)).toList();
     }
+  @Override public Dec.S visitS(SContext ctx){
+    check(ctx);
+    var total=ctx.getText().startsWith("@total");
+    var i=ctx.induction();
+    Optional<Dec.Inductive> ind=i==null?Optional.empty():Optional.of(visitInduction(i));
+    var h=ctx.h();
+    List<Dec.H> hs=h==null?List.of():h.stream().map(this::visitH).toList();
+    return Dec.S.of(total, ind, hs);
+    }
+  @Override public Dec.Inductive visitInduction(InductionContext ctx){
+    check(ctx);
+    E.X x=visitX(ctx.x());
+    E e=ctx.e()==null?null:visitE(ctx.e());
+    return Dec.Inductive.of(x, e);
+    }
+  @Override public Dec.H visitH(HContext ctx){
+    check(ctx);
+    List<T.MX> xs=ctx.cs()==null?List.of():visitCs(ctx.cs());
+    Map<E.X,T> g=ctx.g()==null?Map.of():visitG(ctx.g());
+    return Dec.H.of(xs, g, visitE(ctx.e()));
+    }
+  @Override public List<T.MX> visitCs(CsContext ctx){
+    check(ctx);
+    var c=T.MX.of(ctx.C().getText());
+    if (ctx.cs()==null){ return List.of(c); }
+    return push(c,visitCs(ctx.cs()));
+    }
+  @Override public Map<E.X,T> visitG(GContext ctx){
+    check(ctx);
+    var x=visitX(ctx.x());
+    var t=visitT(ctx.t());    
+    if (ctx.g()==null){ return Map.of(x,t); }
+    var res=new LinkedHashMap<>(Map.of(x,t));
+    res.putAll(visitG(ctx.g()));
+    return res;
+    }
   @Override public Dec.MH visitMH(MHContext ctx) {
     check(ctx);
     List<String> gens=visitGens(ctx.gens());
-    var gg=gens.stream().map(s->new T.MX(s)).toList();
-    var s=new Dec.S(ctx.S()==null?"":ctx.S().getText());
+    var gg=gens.stream().map(s->T.MX.of(s)).toList();
+    Optional<Dec.S> s=ctx.s()==null?Optional.empty():Optional.of(visitS(ctx.s()));
     List<T> ts=ctx.t().stream().map(t->visitT(t)).toList();
     List<E.X> xs=ctx.x().stream().map(x->visitX(x)).toList();
     assert ts.size()==xs.size();
-    return new Dec.MH(s,gg, ts.get(ts.size()-1), xs.get(0),popRight(ts), popLeft(xs));    
+    return Dec.MH.of(s,gg, ts.get(ts.size()-1), xs.get(0),popRight(ts), popLeft(xs));    
     }
   @Override public Dec.M visitMDec(MDecContext ctx) {
     if(ctx.children==null && ctx.getText().isEmpty()){
@@ -109,16 +144,16 @@ public class ParserVisitor implements JVisitor<Object>{
     Dec.MH mH=visitMH(ctx.mH());
     Optional<E> e=Optional.empty();
     if(ctx.e()!=null){e=Optional.of(visitE(ctx.e()));}
-    return new Dec.M(mH, e);    
+    return Dec.M.of(mH, e);    
     }
   @Override public Dec visitDec(DecContext ctx) {
     check(ctx);
-    var name=new T.C(ctx.C().getText());
+    var name=T.C.of(ctx.C().getText());
     List<String> gens=visitGens(ctx.gens());
-    var gg=gens.stream().map(s->new T.CX(s)).toList();
+    var gg=gens.stream().map(s->T.CX.of(s)).toList();
     List<T> ts=ctx.t().stream().map(t->visitT(t)).toList();
     List<Dec.M>ms=ctx.mDec().stream().map(m->visitMDec(m)).toList();
-    return new Dec(name,gg,ts,ms);
+    return Dec.of(name,gg,ts,ms);
     }
   static <A,B> B opt(A a,B def,Function<A,B>f){
     if(a==null){return def;}
@@ -148,7 +183,6 @@ public class ParserVisitor implements JVisitor<Object>{
   @Override public Program visitProg(ProgContext ctx) {
     check(ctx);
     List<Dec> decs=ctx.dec().stream().map(d->visitDec(d)).toList();
-    E e=visitE(ctx.e());
-    return new Program(decs, e);
+    return Program.of(decs);
     }
   }

@@ -11,6 +11,36 @@ import org.antlr.v4.runtime.tree.ParseTreeVisitor;
  */
 public interface JVisitor<T> extends ParseTreeVisitor<T> {
 	/**
+	 * Visit a parse tree produced by {@link JParser#s}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitS(JParser.SContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link JParser#induction}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitInduction(JParser.InductionContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link JParser#h}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitH(JParser.HContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link JParser#cs}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitCs(JParser.CsContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link JParser#g}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitG(JParser.GContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link JParser#x}.
 	 * @param ctx the parse tree
 	 * @return the visitor result

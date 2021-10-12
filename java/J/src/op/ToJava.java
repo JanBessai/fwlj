@@ -7,8 +7,6 @@ import ast.*;
 import visitor.*;
 
 public class ToJava extends AbstractToString{
-  private String mainName;
-  public ToJava(String mainName){this.mainName=mainName;}
   public String lift(String s){
     if(keywords.contains(s)){ return "_"+s; }
     return s;
@@ -95,7 +93,7 @@ public class ToJava extends AbstractToString{
       },()->c(";"));
     }
   public void visitMH(Dec.MH mh){
-    visitS(mh.s());
+    mh.s().ifPresent(this::visitS);
     c("  ");
     if(!mh.gens().isEmpty()){
       c("<");
@@ -120,16 +118,13 @@ public class ToJava extends AbstractToString{
     c(")");
     }
   public void visitS(Dec.S s){
-    if(s.s().isEmpty()) { return; }
-    c("  //");c(s.s());//ok, it must ends with new line
+    c("  //");
+    c(s.total()?"total\n":"aux\n");
+    s.inductive().ifPresent(this::visitInductive);
+    list(s.hs());
     }
   public void visitProgram(Program p){
     for(var d:p.decs()){ visitDec(d); }
-    c("public class "+mainName+"{\n");
-    c("  public static void main(String[]a){\n");
-    c("    ");
-    visitE(p.main());
-    c(";\n    }\n  }");
     }
   public void list(List<? extends Visitable.Root<?>>vs){
     if (vs.isEmpty()){ return; }

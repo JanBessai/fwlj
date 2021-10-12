@@ -95,7 +95,7 @@ public class ToSource extends AbstractToString{
     c(";");
     }
   public void visitMH(Dec.MH mh){
-    visitS(mh.s());
+    mh.s().ifPresent(this::visitS);
     c("  ");
     visitT(mh.retType());
     c(" ");
@@ -120,13 +120,20 @@ public class ToSource extends AbstractToString{
     c(")");
     }
   public void visitS(Dec.S s){
-    if(s.s().isEmpty()) { return; }
-    c("  ");c(s.s());
+    if(s.total()) {c("total");}
+    else{c("aux");}
+    s.inductive().ifPresent(this::visitInductive);
+    list(s.hs());
     }
   public void visitProgram(Program p){
-    for(var d:p.decs()){ visitDec(d); }
-    visitE(p.main());
+    for(var d:p.decs()){ 
+      visitDec(d);
+      c("\n");
+      };
     }
+  public void visitInductive(Dec.Inductive i){throw new Error("todo");}
+  public void visitH(Dec.H i){throw new Error("todo");}
+    
   public void list(List<? extends Visitable.Root<?>>vs){
     if (vs.isEmpty()){ return; }
     vs.get(0).visitable().accept(this);
