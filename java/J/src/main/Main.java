@@ -11,8 +11,8 @@ public class Main {
     Program p=new parser.JParser().program(Path.of("Dummy.txt"),s);
     //var res=new ToSource().of(p);
     //System.out.println(res);
-    var resJ=new ToJava("MainOut").of(p);
-    //System.out.println(resJ);
+    var resJ=new ToJava().of(p);
+    System.out.println(resJ);
     var resCoq=new ToCoq().of(p);
     System.out.println(resCoq);    
     }
