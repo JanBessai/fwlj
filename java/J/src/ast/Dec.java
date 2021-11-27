@@ -3,7 +3,6 @@ package ast;
 import java.util.*;
 
 import ast.E.*;
-import ast.E.MCall.*;
 import caching.*;
 import op.*;
 import visitor.*;
@@ -71,6 +70,10 @@ public final class Dec implements Visitable.Record<Dec,Dec>{
     public void accept(CollectorVisitor v) {v.visitMH(this);}
     public Visitable<MH> visitable(){return this;}
     public String toString() { return new ToSource().of(this); }
+    public T get(E.X x){
+      for(int i=0;i<xs.size();i++){ if(xs.get(i)==x) {return ts.get(i); }}
+      throw new RuntimeException("parameter "+x+" undeclared in "+this);
+      }
     }
   public static final class Inductive implements Visitable.Record<Inductive,Inductive>{
     private final X x;
@@ -90,13 +93,15 @@ public final class Dec implements Visitable.Record<Dec,Dec>{
     private final List<T.MX> xs;
     private final Map<E.X,T> g;
     private final E e;
+    private final List<H> hs;
     public final List<T.MX> xs(){ return xs; }
-    public final Map<E.X,T> g(){return g; }
+    public final Map<E.X,T> g(){ return g; }
     public final E e(){ return e; }
-    private record Inner(List<T.MX> xs,Map<E.X,T> g,E e){}
-    private H(Inner i){ xs=i.xs;g=i.g;e=i.e; }    
+    public final List<H> hs(){ return hs; }
+    private record Inner(List<T.MX> xs,Map<E.X,T> g,E e,List<H>hs){}
+    private H(Inner i){ xs=i.xs;g=i.g;e=i.e;hs=i.hs; }    
     private final static Cache<Inner,H> cache=new Cache<>(H::new);
-    public static H of(List<T.MX> xs,Map<E.X,T> g,E e){ return cache.of(new Inner(xs,g,e)); }
+    public static H of(List<T.MX> xs,Map<E.X,T> g,E e,List<H> hs){ return cache.of(new Inner(xs,g,e,hs)); }
     public H accept(CloneVisitor v){return v.visitH(this);}
     public void accept(CollectorVisitor v) {v.visitH(this);}
     public Visitable<H> visitable(){return this;}

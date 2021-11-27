@@ -16,5 +16,10 @@ public abstract class Collect<K> implements CollectorVisitor{
   public static class AllC extends Collect<T.C> {
     @Override public void visitC(T.C c){add(c);}}
   public static class AllX extends Collect<E.X> {
-    @Override public void visitX(E.X x){add(x);}}
+    @Override public void visitX(E.X x){add(x);}
+    @Override public void visitInductive(Dec.Inductive i){
+      visitX(i.x());
+      if(i.e()!=null){ visitE(i.e()); }
+      }  
+    }
   }
